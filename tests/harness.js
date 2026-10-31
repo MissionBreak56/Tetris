@@ -7,11 +7,18 @@ const vm = require('vm');
 
 const HTML = path.join(__dirname, '..', 'app', 'src', 'main', 'assets', 'index.html');
 
-function extractScript() {
+// Devolve os scripts na ordem em que o navegador os executa (src externos + inline).
+function extractScripts() {
   const html = fs.readFileSync(HTML, 'utf8');
-  const m = html.match(/<script>([\s\S]*)<\/script>/);
-  if (!m) throw new Error('<script> não encontrado em index.html');
-  return m[1];
+  const out = [];
+  const re = /<script(?:\s+src="([^"]+)")?\s*>([\s\S]*?)<\/script>/g;
+  let m;
+  while ((m = re.exec(html))) {
+    if (m[1]) out.push({ name: m[1], code: fs.readFileSync(path.join(path.dirname(HTML), m[1]), 'utf8') });
+    else out.push({ name: 'index.html', code: m[2] });
+  }
+  if (!out.length) throw new Error('<script> não encontrado em index.html');
+  return out;
 }
 
 function makeCtx() {
@@ -59,6 +66,7 @@ function load(seed = 1, store = {}, opts = {}) {
     document: {
       getElementById: (id) => els[id] || (els[id] = makeEl(id)),
       createElement: () => makeEl(),
+      createTextNode: (x) => ({ nodeType: 3, textContent: x }),
       addEventListener: (t, f) => { (listeners['doc:' + t] = listeners['doc:' + t] || []).push(f); },
       documentElement: { style: { setProperty() {} } },
       hidden: false,
@@ -78,7 +86,7 @@ function load(seed = 1, store = {}, opts = {}) {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(seedSource(seed), sandbox);
-  vm.runInContext(extractScript(), sandbox, { filename: 'index.html' });
+  extractScripts().forEach((sc) => vm.runInContext(sc.code, sandbox, { filename: sc.name }));
   // som desligado nos testes (tone() retorna cedo)
   if (opts.mute !== false) vm.runInContext('settings.sound=false;', sandbox);
 

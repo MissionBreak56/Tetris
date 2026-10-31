@@ -56,6 +56,13 @@
     box-shadow:0 0 16px rgba(var(--glow),.8),inset 0 0 10px rgba(var(--glow),.4);transition:transform .08s}
   #pauseBtn:active{transform:scale(.9)}
   #pauseBtn i{display:block;width:16%;height:42%;background:#fff;margin:0 7%;border-radius:2px}
+  .row.wrap{flex-wrap:wrap}.row.wrap .btn{flex:1 1 30%}
+  .sheetp{width:min(94vw,440px);text-align:left}.sheetp h2{text-align:center}
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(var(--glow),.25);font-size:15px}
+  .kv b{color:#ffd54a;text-align:right}.sec{margin:12px 0 4px;color:var(--acc);font-weight:700;font-size:13px;letter-spacing:1px}
+  .btn.danger{background:linear-gradient(#b3262d,#701419);border-color:#ff8a8a}
+  .newrec{margin:10px 0 2px;color:#ffd54a;font-weight:800;text-align:center;animation:glow 1.2s ease-in-out infinite alternate}
+  #confirmBox{z-index:40}
   .hint{font-size:12px;color:#9fb4ee;margin-top:10px;line-height:1.6}
 
   /* ===== Tela inicial ===== */
@@ -100,21 +107,8 @@
   <button class="mb side" id="tSound"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>SOUND<i class="slash"></i></button>
 </div>
 
-<div class="overlay" id="levelPanel"><div class="panel">
-  <h2>Escolha o nível inicial</h2>
-  <div class="grid" id="levelGrid"></div>
-  <button class="btn small" id="tVib">Vibrate: OFF</button>
-  <div class="hint">Gestos valem em qualquer lugar da tela:<br>
-  toque = gira (lado escolhe o sentido) · arrasta = move<br>
-  arrasta ↓ = queda suave · desliza ↓ = derruba · desliza ↑ = hold</div>
-  <button class="btn small" id="bLevelBack">Voltar</button>
-</div></div>
-
-<div class="overlay" id="themePanel"><div class="panel">
-  <h2>Tema</h2>
-  <div class="swatches" id="swatches"></div>
-  <button class="btn small" id="bThemeBack">Voltar</button>
-</div></div>
+<div class="overlay" id="sheet"><div class="panel sheetp"><h2 id="sheetTitle"></h2><div id="sheetBody"></div><button class="btn small" id="sheetBack">Voltar</button></div></div>
+<div class="overlay" id="confirmBox"><div class="panel"><div class="stat" id="confirmText"></div><div class="row"><button class="btn small" id="confirmNo">Cancelar</button><button class="btn small danger" id="confirmYes">Confirmar</button></div></div></div>
 
 <div class="overlay" id="pausePanel"><div class="panel">
   <h1>Paused!</h1>
@@ -124,12 +118,15 @@
 
 <div class="overlay" id="endPanel"><div class="panel">
   <h1 id="endTitle">Game Over</h1>
-  <div class="stat">Score: <b id="endScore">0</b></div>
-  <div class="stat">Best Score: <b id="endBest">0</b></div>
+  <div id="endStats"></div>
   <button class="btn" id="bRetry">Retry</button>
   <button class="btn" id="bEndHome">Home</button>
 </div></div>
 
+<script src="js/storage.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/history.js"></script>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -162,8 +159,6 @@ const SKILL_RGB={BLUR:'160,200,255',EROSION:'255,140,60',FISSION:'255,80,200',FU
 const POINTS={1:100,2:300,3:500,4:800};
 
 /* ================= PERSISTÊNCIA ================= */
-const LS=k=>{try{return localStorage.getItem('tetris_'+k);}catch(e){return null;}};
-const SV=(k,v)=>{try{localStorage.setItem('tetris_'+k,v);}catch(e){}};
 const settings={
   sound: LS('isSound')!=='0', music: LS('isMusic')!=='0',
   ghost: LS('isShowGhost')!=='0', vib: LS('isVabiration')==='1',
@@ -244,7 +239,8 @@ function newGame(mode){
       level:settings.startLevel, lines:0, score:0, disp:0, mult:1,
       fallAcc:0, lockT:0, soft:false, lastRot:false,
       speed:1, qBlock:null, qCounter:0, qThreshold:10,
-      timeLeft:120, timeAcc:0, b2b:false, over:false, rowOff:Array(ROWS).fill(0), overT:0 };
+      timeLeft:120, timeAcc:0, b2b:false, over:false, rowOff:Array(ROWS).fill(0), overT:0,
+      combo:0, maxCombo:0, tetrises:0, tspins:0, perfect:0, pieces:0, actions:0, ms:0 };
   FX.parts.length=0; FX.flash.length=0; FX.lock.length=0; FX.trail=null; FX.shake=0; FX.pulse=0; FX.screen=null;
   spawn();
 }
@@ -324,6 +320,10 @@ function lockPiece(){
   const cleared=[];
   for(let r=0;r<ROWS;r++) if(G.grid[r].every(c=>c)) cleared.push(r);
   const n=cleared.length;
+  G.pieces++;
+  if(n>0){ G.combo++; if(G.combo>G.maxCombo) G.maxCombo=G.combo; } else G.combo=0;
+  if(n===4) G.tetrises++;
+  if(tspin) G.tspins++;
   const skill=!!(G.qBlock&&cleared.includes(G.qBlock.r));
   if(n){
     cleared.forEach(r=>{ FX.flash.push({r,t:.34});
@@ -336,6 +336,7 @@ function lockPiece(){
     FX.shake=Math.max(FX.shake,n>=4?CELL*0.5:CELL*0.2);
     if(n>=4) FX.screen={c:'255,255,255',t:.4,max:.4};
   }
+  if(n>0&&G.grid.every(row=>row.every(c=>!c))) G.perfect++;
   if(skill){ G.qBlock=null; triggerSkill(); }
   let base=0,name='';
   if(tspin&&n===0){base=400;name='T-SPIN';}
@@ -387,7 +388,7 @@ function triggerSkill(){
 /* ================= FLUXO ================= */
 function show(id){ $(id).classList.add('on'); }
 function hide(id){ $(id).classList.remove('on'); }
-function hideAll(){ ['menu','levelPanel','themePanel','pausePanel','endPanel'].forEach(hide); }
+function hideAll(){ ['menu','sheet','confirmBox','pausePanel','endPanel'].forEach(hide); }
 function restartAnim(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
 
 function startGame(mode){
@@ -400,17 +401,12 @@ function startGame(mode){
     else { cd.style.display='none'; state='PLAY'; startMusic(); }
   }; step();
 }
-function gameOver(){
+function gameOver(reason){
   if(!G||G.overDone) return; G.overDone=true;
   state='OVER'; G.overT=0; stopMusic(); sfx.gameover(); vib([80,60,80]);
   FX.shake=CELL*0.4;
-  const keys={1:'bestScore',2:'bestScore2Minutes',3:'bestScoreStrategy'};
-  const k=keys[G.mode], prev=+(LS(k)||0);
-  const isBest=G.score>prev;
-  if(isBest) SV(k,G.score);
-  $('endTitle').textContent=isBest?'NEW HIGH SCORE!':'Game Over';
-  $('endScore').textContent=G.score;
-  $('endBest').textContent=Math.max(prev,G.score);
+  const res=Results.compile(G,reason), rec=Results.commit(res);
+  Results.render(res,rec);
   $('pauseBtn').style.display='none';
   setTimeout(()=>{ if(state==='OVER') show('endPanel'); },1100);
 }
@@ -425,6 +421,7 @@ function goMenu(){ state='MENU'; stopMusic(); G=null; hideAll(); show('menu');
 /* ================= UPDATE ================= */
 function update(dt){
   if(state!=='PLAY'||!G||G.over) return;
+  G.ms+=dt*1000;
   if(G.mode===2){ G.timeAcc+=dt;
     while(G.timeAcc>=1){ G.timeAcc-=1; G.timeLeft--;
       if(G.timeLeft<=0){ gameOver(); return; } } }
@@ -738,30 +735,37 @@ addEventListener('contextmenu',e=>e.preventDefault());
 /* ================= UI ================= */
 function refreshMenu(){
   const lb=$('lvBadge'); lb.textContent=settings.startLevel; lb.classList.toggle('on',settings.startLevel>1);
+  const tv=$('tVib'); if(tv) tv.textContent='Vibrar: '+(settings.vib?'ON':'OFF');
   $('tGhost').classList.toggle('off',!settings.ghost);
   $('tMusic').classList.toggle('off',!settings.music);
   $('tSound').classList.toggle('off',!settings.sound);
-  $('tVib').textContent='Vibrate: '+(settings.vib?'ON':'OFF');
 }
 $('bMarathon').onclick=()=>{sfx.click();startGame(1);};
 $('bTimed').onclick=()=>{sfx.click();startGame(2);};
 $('bStrategy').onclick=()=>{sfx.click();startGame(3);};
-$('bLevel').onclick=()=>{sfx.click();hide('menu');show('levelPanel');};
-$('bLevelBack').onclick=()=>{sfx.click();hide('levelPanel');show('menu');};
+$('bLevel').onclick=()=>{sfx.click();Hub.open();};
+$('sheetBack').onclick=()=>{sfx.click();Sheet.back();};
 $('bTheme').onclick=()=>{settings.theme=(settings.theme+1)%THEMES.length;saveSettings();applyTheme();sfx.click();};
-$('bThemeBack').onclick=()=>{sfx.click();hide('themePanel');show('menu');};
-for(let i=1;i<=15;i++){ const b=document.createElement('button');
-  b.className='btn'; b.textContent=i;
-  b.onclick=()=>{sfx.click();settings.startLevel=i;saveSettings();refreshMenu();hide('levelPanel');show('menu');};
-  $('levelGrid').appendChild(b); }
-THEMES.forEach((th,i)=>{ const s=document.createElement('div'); s.className='sw';
-  s.style.background='linear-gradient('+th[0]+','+th[1]+')';
-  s.onclick=()=>{sfx.click();settings.theme=i;saveSettings();applyTheme();hide('themePanel');show('menu');};
-  $('swatches').appendChild(s); });
+function openLevelSheet(){
+  Sheet.push('Nível inicial',(b)=>{
+    const g=h('div',{class:'grid'});
+    for(let i=1;i<=15;i++) g.appendChild(btn(String(i),()=>{settings.startLevel=i;saveSettings();refreshMenu();Sheet.back();}));
+    b.appendChild(g);
+  });
+}
+function openSettingsSheet(){
+  Sheet.push('Ajustes',(b)=>{
+    const tog=(label,get,set)=>{ const e=btn('',()=>{}); const upd=()=>{e.textContent=label+': '+(get()?'ON':'OFF');}; e.onclick=()=>{sfx.click();set(!get());saveSettings();refreshMenu();upd();}; upd(); return e; };
+    b.appendChild(tog('Vibrar',()=>settings.vib,(v)=>{settings.vib=v;}));
+    b.appendChild(tog('Controle lateral no toque',()=>settings.touch,(v)=>{settings.touch=v;}));
+    b.appendChild(h('div',{class:'hint'},'Gestos valem em qualquer lugar da tela:',h('br'),'toque = gira (lado escolhe o sentido) · arrasta = move',h('br'),'arrasta ↓ = queda suave · desliza ↓ = derruba · desliza ↑ = hold'));
+  });
+}
+Hub.add(10,'Nível inicial',openLevelSheet);
+Hub.add(15,'Ajustes',openSettingsSheet);
 $('tGhost').onclick=()=>{settings.ghost=!settings.ghost;saveSettings();refreshMenu();sfx.click();};
 $('tMusic').onclick=()=>{settings.music=!settings.music;saveSettings();refreshMenu();sfx.click();if(!settings.music)stopMusic();};
 $('tSound').onclick=()=>{settings.sound=!settings.sound;saveSettings();refreshMenu();sfx.click();};
-$('tVib').onclick=()=>{settings.vib=!settings.vib;saveSettings();refreshMenu();sfx.click();};
 $('bResume').onclick=()=>{sfx.click();resumeGame();};
 $('bPauseHome').onclick=()=>{sfx.click();goMenu();};
 $('bRetry').onclick=()=>{sfx.click();startGame(G?G.mode:1);};
