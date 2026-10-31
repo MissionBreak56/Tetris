@@ -31,7 +31,8 @@ const Results = {
   /** Grava estatísticas, histórico e recorde. Chamado UMA vez por partida (gameOver tem trava overDone). */
   commit(r) {
     if (r.mode === 9) return { tracked: false, isBest: false, prev: 0, best: 0 };   // tutorial não grava nada
-    StatsMgr.record(r);
+    const st = StatsMgr.record(r);
+    r.unlocked = Achv.check(st);
     History.add(this.entry(r));
     const rec = Records.update(r);
     return rec;
@@ -49,6 +50,7 @@ const Results = {
     box.appendChild(kv('Linhas', r.lines));
     box.appendChild(kv('Duração', fmtMsP(r.ms)));
     if (rec.tracked) box.appendChild(kv(sprint ? 'Melhor tempo' : 'Best Score', sprint ? (rec.best ? fmtMsP(rec.best) : '—') : fmtNum(rec.best)));
+    (r.unlocked || []).forEach((a) => box.appendChild(h('div', { class: 'newrec', text: '🏆 Conquista: ' + a.name })));
     if (rec.isBest) box.appendChild(h('div', { class: 'newrec', text: '★ Novo recorde' + (rec.prev ? ' (anterior: ' + (sprint ? fmtMsP(rec.prev) : fmtNum(rec.prev)) + ')' : '') }));
   },
 };
