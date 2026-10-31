@@ -4,6 +4,7 @@ Tetris para Android feito do zero, sem anúncios e sem rede, inspirado nas regra
 
 - Grade 10×20, sorteio 7-bag, hold, peça-fantasma, T-Spin e Back-to-Back
 - Gravidade pela tabela de quadros (níveis 1–30)
+- Tela inicial neon (CLASSIC, 2 MINUTES, STRATEGY, LEVEL, THEME, GHOST, MUSIC, SOUND) que acompanha o tema escolhido
 - Modos: **Maratona**, **2 Minutos** e **Estratégia** (bloco-pergunta com 9 habilidades: BLUR, EROSION, FISSION, FUSION, INVASION, SHIFT, SPEED_UP, TURN, TWIST)
 - Sons e música sintetizados (WebAudio), 4 temas, recordes salvos no aparelho
 - Android 6.0+ (minSdk 23). O jogo é um HTML/Canvas em `app/src/main/assets/index.html` dentro de uma WebView
