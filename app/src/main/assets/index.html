@@ -77,6 +77,8 @@
   #msg.m-lines{color:#fff;text-shadow:0 0 10px #6aa3ff,0 3px 12px #000}
   #msg.m-level{color:#9bf0ff;text-shadow:0 0 12px #2fb8ff,0 3px 12px #000}
   #msg.m-skill{color:#b8ffd0;text-shadow:0 0 12px #2fff88,0 3px 12px #000}
+  #tut{display:none;position:fixed;left:3%;right:3%;bottom:1.5%;z-index:12;padding:10px 12px;border-radius:14px;background:rgba(var(--btnbg),.94);border:2px solid var(--acc);box-shadow:0 0 14px rgba(var(--glow),.6);font-size:14px;line-height:1.35}
+  #tut .tp{float:right;color:#ffd54a;font-weight:700;margin-left:8px}#tut .btn{width:auto;margin:6px 6px 0 0;padding:6px 14px;font-size:13px}
   .hint{font-size:12px;color:#9fb4ee;margin-top:10px;line-height:1.6}
 
   /* ===== Tela inicial ===== */
@@ -107,6 +109,7 @@
 <body>
 <canvas id="cv"></canvas>
 <button id="pauseBtn"><i></i><i></i></button>
+<div id="tut"><span class="tp" id="tutProg"></span><span id="tutText"></span><br><button class="btn small" id="tutOk">Entendi</button><button class="btn small" id="tutSkip">Pular tutorial</button></div>
 <div id="msg"></div>
 <div id="msg2"></div>
 <div id="count"></div>
@@ -141,6 +144,9 @@
 <script src="js/achv.js"></script>
 <script src="js/controls.js"></script>
 <script src="js/settings.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/modes.js"></script>
+<script src="js/tutorial.js"></script>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -243,7 +249,8 @@ const BG={stars:[],fall:[]};
 function gravFrames(lv){ if(lv<=10) return GRAV[lv-1]; if(lv<=13) return 5;
   if(lv<=16) return 4; if(lv<=19) return 3; if(lv<=29) return 2; return 1; }
 function newGrid(){ return Array.from({length:ROWS},()=>Array(COLS).fill(null)); }
-function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];} return a; }
+const rnd=()=>(G&&G.rng)?G.rng():Math.random();   // aleatoriedade de JOGO (determinística por semente); efeitos visuais usam Math.random
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=(rnd()*(i+1))|0;[a[i],a[j]]=[a[j],a[i]];} return a; }
 function refill(q){ q.push(...shuffle(['I','J','L','O','S','T','Z'])); }
 function cells(p,rot,x,y){
   if(typeof p==='object'){ const o=p; p=o.t; rot=rot??o.rot; x=x??o.x; y=y??o.y; }
@@ -254,13 +261,16 @@ function makePiece(t){ return {t,rot:0,x:3,y:t==='I'?-1:0,dx:3,age:0}; }
 function interval(){ return gravFrames(G.level)/FPS*G.speed; }
 
 function newGame(mode,opts){
-  const q=[]; refill(q); refill(q);
-  G={ mode, grid:newGrid(), queue:q, active:null, held:null, canHold:true,
-      level:settings.startLevel, lines:0, score:0, disp:0, mult:1,
+  opts=opts||{};
+  const seed=opts.seed!=null?(opts.seed>>>0):((Math.random()*4294967296)>>>0);
+  const rules=rulesFor(mode,opts);
+  G={ mode, opts, rules, seed, rng:mkRng(seed), grid:newGrid(), queue:[], active:null, held:null, canHold:true,
+      level:rules.fixedLevel||settings.startLevel, lines:0, score:0, disp:0, mult:1,
       fallAcc:0, lockT:0, soft:false, lastRot:false,
       speed:1, speedT:0, blurT:0, qBlock:null, qCounter:0, qThreshold:10,
-      timeLeft:120, timeAcc:0, b2b:false, over:false, rowOff:Array(ROWS).fill(0), overT:0,
+      timeLeft:rules.timeLimit||120, timeAcc:0, b2b:false, over:false, rowOff:Array(ROWS).fill(0), overT:0,
       combo:0, maxCombo:0, tetrises:0, tspins:0, perfect:0, pieces:0, actions:0, ms:0 };
+  refill(G.queue); refill(G.queue);
   FX.parts.length=0; FX.flash.length=0; FX.lock.length=0; FX.trail=null; FX.shake=0; FX.pulse=0; FX.screen=null;
   spawn();
 }
@@ -268,11 +278,14 @@ function spawn(){
   const t=G.queue.shift(); if(G.queue.length<7) refill(G.queue);
   G.active=makePiece(t);
   G.canHold=true; G.lastRot=false; G.fallAcc=0; G.lockT=0;
-  if(collides(cells(G.active),G.grid)){ G.over=true; gameOver(); }
+  if(collides(cells(G.active),G.grid)){
+    if(G.rules.topout==='reset'){ G.grid=newGrid(); G.rowOff.fill(0); FX.pulse=1; if(!G.rules.tutorial) showMsg2('ZEN RESET'); }
+    else { G.over=true; gameOver(); }
+  }
 }
 function move(dx){
   const p=G.active; if(!p) return false;
-  if(!collides(cells(p.t,p.rot,p.x+dx,p.y),G.grid)){ p.x+=dx; sfx.move(); G.lockT=0; return true; }
+  if(!collides(cells(p.t,p.rot,p.x+dx,p.y),G.grid)){ p.x+=dx; sfx.move(); G.lockT=0; tutEv('move'); return true; }
   return false;
 }
 function rotate(dir){
@@ -280,13 +293,14 @@ function rotate(dir){
   const nr=(p.rot+dir+4)%4;
   for(const [kx,ky] of KICKS){
     if(!collides(cells(p.t,nr,p.x+kx,p.y+ky),G.grid)){
-      p.rot=nr; p.x+=kx; p.y+=ky; sfx.rotate(); G.lastRot=true; G.lockT=0; return true;
+      p.rot=nr; p.x+=kx; p.y+=ky; sfx.rotate(); G.lastRot=true; G.lockT=0; tutEv('rotate'); return true;
     }
   }
   return false;
 }
 function hardDrop(){
   const p=G.active; if(!p) return;
+  tutEv('hard');
   const start=cells(p);
   let d=0; while(!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){ p.y++; d++; }
   const end=cells(p);
@@ -299,7 +313,8 @@ function hardDrop(){
   sfx.dropFast(); vib(30); lockPiece();
 }
 function hold(){
-  const p=G.active; if(!p||!G.canHold) return;
+  const p=G.active; if(!p||!G.canHold||G.rules.noHold) return;
+  tutEv('hold');
   sfx.putBack();
   const cur=p.t;
   if(G.held){ G.active=makePiece(G.held);
@@ -333,7 +348,9 @@ function burst(c,r,color,count){
 function lockPiece(){
   const p=G.active;
   const cs=cells(p);
-  if(cs.some(([,y])=>y<0)){ gameOver(); return; }
+  if(cs.some(([,y])=>y<0)){
+    if(G.rules.topout==='reset'){ G.grid=newGrid(); G.rowOff.fill(0); FX.pulse=1; if(!G.rules.tutorial) showMsg2('ZEN RESET'); spawn(); return; }
+    gameOver(); return; }
   cs.forEach(([x,y])=>{ G.grid[y][x]=COLORS[p.t]; FX.lock.push({x,y,t:.28}); });
   const tspin=isTSpin(p,G.grid);
   sfx.drop();
@@ -369,22 +386,30 @@ function lockPiece(){
   if(special) G.b2b=true; else if(n>0) G.b2b=false;
   if(n>0||tspin){ G.score+=Math.round(pts); showMsg(name); (n>=4?sfx.tetris:sfx.line)(); vib(40); }
   if(pcl) showMsg2('PERFECT CLEAR'); else if(G.combo>=2) showMsg2('COMBO x'+G.combo);
-  if(G.mode===3){
+  if(G.rules.skills){
     G.qCounter+=n;
     if(!G.qBlock&&G.qCounter>=G.qThreshold) placeQuestion();
   }
   G.lines+=n;
-  while(G.lines>=10*G.level&&G.level<30){ G.level++; showMsg('LEVEL '+G.level); FX.pulse=1; }
+  while(G.rules.levelUps&&G.lines>=10*G.level&&G.level<30){ G.level++; showMsg('LEVEL '+G.level); FX.pulse=1; }
+  if(n>0) tutEv('line');
+  if(checkGoal()) return;
   if(!G.over) spawn();
+}
+function checkGoal(){
+  const g=G.rules.goal; if(!g||G.overDone) return false;
+  const v=g.type==='lines'?G.lines:g.type==='score'?G.score:0;
+  if((g.type==='lines'||g.type==='score')&&v>=g.target){ G.won=true; gameOver('goal'); return true; }
+  return false;
 }
 function placeQuestion(){
   for(let t=0;t<25;t++){
-    const c=(Math.random()*COLS)|0;
+    const c=(rnd()*COLS)|0;
     for(let r=0;r<ROWS;r++){ if(G.grid[r][c]){ G.qBlock={r,c}; G.qCounter=0; return; } }
   }
 }
 function triggerSkill(){
-  const s=SKILLS[(Math.random()*SKILLS.length)|0];
+  const s=SKILLS[(rnd()*SKILLS.length)|0];
   const g=G.grid, g0=G;
   const shift=(cols,dx)=>{ cols.forEach(c=>{
     const order=dx>0?[...Array(ROWS).keys()]:[...Array(ROWS).keys()].reverse();
@@ -392,7 +417,7 @@ function triggerSkill(){
   });};
   if(s==='SPEED_UP'){ G.speed=0.5; G.speedT=10; }
   else if(s==='BLUR'){ canvas.style.filter='blur(3px)'; G.blurT=6; }
-  else if(s==='SHIFT') shift([...Array(COLS).keys()],Math.random()<0.5?-1:1);
+  else if(s==='SHIFT') shift([...Array(COLS).keys()],rnd()<0.5?-1:1);
   else if(s==='TURN'){ const o=g.map(r=>r.slice()); for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++) g[r][c]=o[ROWS-1-r][COLS-1-c]; }
   else if(s==='TWIST'){ const o=g.map(r=>r.slice()); for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++) g[r][c]=o[r][COLS-1-c]; }
   else if(s==='EROSION'){ const occ=[]; for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++) if(g[r][c]) occ.push([r,c]);
@@ -400,9 +425,9 @@ function triggerSkill(){
   else if(s==='FISSION'){ shift([0,1,2,3,4],-1); shift([5,6,7,8,9],1); }
   else if(s==='FUSION'){ shift([0,1,2,3,4],1); shift([5,6,7,8,9],-1); }
   else if(s==='INVASION'){ let n=0,tries=0;
-    while(n<6&&tries<200){ tries++; const r=(Math.random()*ROWS)|0,c=(Math.random()*COLS)|0;
-      if(!g[r][c]){ g[r][c]=Object.values(COLORS)[(Math.random()*7)|0]; burst(c,r,g[r][c],3); n++; } } }
-  if(G.mode===3){ G.mult+=0.5; G.qThreshold=5; G.qCounter=0; }
+    while(n<6&&tries<200){ tries++; const r=(rnd()*ROWS)|0,c=(rnd()*COLS)|0;
+      if(!g[r][c]){ g[r][c]=Object.values(COLORS)[(rnd()*7)|0]; burst(c,r,g[r][c],3); n++; } } }
+  if(G.rules.skills){ G.mult+=0.5; G.qThreshold=5; G.qCounter=0; }
   FX.screen={c:SKILL_RGB[s]||'255,255,255',t:.5,max:.5}; FX.shake=Math.max(FX.shake,CELL*0.3); FX.pulse=1;
   showMsg(s); sfx.skill(); vib([40,60,40]);
 }
@@ -414,7 +439,7 @@ function hideAll(){ ['menu','sheet','confirmBox','pausePanel','endPanel'].forEac
 function restartAnim(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
 
 function startGame(mode,opts){
-  try{ac();}catch(e){} hideAll(); newGame(mode,opts);
+  try{ac();}catch(e){} hideAll(); showTutBanner(false); newGame(mode,opts);
   $('pauseBtn').style.display='flex';
   let n=3; state='COUNT';
   const cd=$('count'); cd.style.display='flex';
@@ -452,9 +477,14 @@ function renderPause(){
   b.appendChild(row);
   b.appendChild(slider('Volume música',0,1,0.05,()=>settings.musicVol,v=>{settings.musicVol=v;saveSettings();}));
   b.appendChild(slider('Volume efeitos',0,1,0.05,()=>settings.sfxVol,v=>{settings.sfxVol=v;saveSettings();}));
-  b.appendChild(btn('Home',()=>Confirm.ask('Sair para o menu? A partida atual será encerrada sem registro.',goMenu),'danger'));
+  b.appendChild(btn('Home',()=>Confirm.ask(G&&G.rules.recordOnExit?'Encerrar a sessão Zen? Ela será salva nas estatísticas.':'Sair para o menu? A partida atual será encerrada sem registro.',leaveGame),'danger'));
 }
-function goMenu(){ state='MENU'; stopMusic(); G=null; hideAll(); show('menu');
+/** Sair de uma partida em andamento. Zen grava a sessão (sem recorde); outros modos descartam. */
+function leaveGame(){
+  if(G&&G.rules&&G.rules.recordOnExit&&!G.overDone&&G.ms>3000){ G.overDone=true; Results.commit(Results.compile(G,'exit')); }
+  goMenu();
+}
+function goMenu(){ state='MENU'; stopMusic(); G=null; hideAll(); show('menu'); showTutBanner(false);
   $('pauseBtn').style.display='none'; canvas.style.filter=''; }
 
 /* ================= UPDATE ================= */
@@ -463,21 +493,22 @@ function update(dt){
   G.ms+=dt*1000;
   if(G.speedT>0){ G.speedT-=dt; if(G.speedT<=0) G.speed=1; }
   if(G.blurT>0){ G.blurT-=dt; if(G.blurT<=0) canvas.style.filter=''; }
-  if(G.mode===2){ G.timeAcc+=dt;
+  if(G.rules.tutorial){ Tut.tick(); if(!G) return; }
+  if(G.rules.timeLimit){ G.timeAcc+=dt;
     while(G.timeAcc>=1){ G.timeAcc-=1; G.timeLeft--;
-      if(G.timeLeft<=0){ gameOver(); return; } } }
+      if(G.timeLeft<=0){ G.won=!G.rules.goal||G.rules.goal.type==='time'; gameOver('time'); return; } } }
   const p=G.active; if(!p) return;
   const iv=interval();
   if(G.soft){
-    if(!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){ p.y++; G.score+=G.level; G.lockT=0; }
-  } else {
+    if(!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){ p.y++; G.score+=G.level; G.lockT=0; tutEv('soft'); }
+  } else if(!G.rules.noGravity){
     G.fallAcc+=dt;
     while(G.fallAcc>=iv){ G.fallAcc-=iv;
       if(!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){ p.y++; G.lockT=0; } }
   }
   if(collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){
     G.lockT+=dt;
-    if(G.lockT>=0.5) lockPiece();
+    if(G.lockT>=0.5&&!(G.rules.noGravity&&!G.soft)) lockPiece();
   } else G.lockT=0;
 }
 function updateFx(dt){
@@ -655,8 +686,10 @@ function drawHUD(){
   ctx.save(); ctx.translate(W/2,y); ctx.scale(pop,pop);
   ctx.shadowColor='#4f8bff'; ctx.shadowBlur=CELL*0.3;
   txt(String(Math.round(G.disp)),0,0,CELL*1.15,'#fff','center','500'); ctx.restore();
-  if(G.mode===2) txt('TIME '+G.timeLeft,W/2,y+CELL*0.95,CELL*0.5,G.timeLeft<=10?'#ff6a6a':'#a9c6ff','center','600');
-  if(G.mode===3) txt('x'+G.mult.toFixed(1)+'  ·  ?'+(G.qBlock?'':' '+G.qCounter+'/'+G.qThreshold),W/2,y+CELL*0.95,CELL*0.5,'#ffd54a','center','600');
+  if(G.rules.timeLimit) txt('TIME '+G.timeLeft,W/2,y+CELL*0.95,CELL*0.5,G.timeLeft<=10?'#ff6a6a':'#a9c6ff','center','600');
+  else if(G.rules.goal) txt(fmtMsP(G.ms)+'  ·  '+(G.rules.goal.type==='lines'?G.lines+'/'+G.rules.goal.target+' linhas':fmtNum(G.score)+'/'+fmtNum(G.rules.goal.target)),W/2,y+CELL*0.95,CELL*0.5,'#a9c6ff','center','600');
+  else if(G.mode===4) txt('ZEN',W/2,y+CELL*0.95,CELL*0.5,'#a9c6ff','center','600');
+  if(G.rules.skills) txt('x'+G.mult.toFixed(1)+'  ·  ?'+(G.qBlock?'':' '+G.qCounter+'/'+G.qThreshold),W/2,y+CELL*0.95,CELL*0.5,'#ffd54a','center','600');
   txt('Hold',L.hold.x+CELL*0.25,L.hold.y-CELL*0.5,CELL*0.55,'#fff','left');
   neonBox(L.hold.x,L.hold.y,L.hold.w,L.hold.h);
   if(G.held) drawMini(G.held,L.hold.x,L.hold.y,L.hold.w,L.hold.h,G.canHold?1:.4);
@@ -687,7 +720,7 @@ function drawBoard(){
   const p=G.active;
   if(p&&state!=='OVER'){
     const frac=0; // descida de bloco em bloco, sem interpolação vertical
-    if(settings.ghost){
+    if(settings.ghost&&!G.rules.noGhost){
       const gy=ghostY();
       ctx.strokeStyle='#2a86d6'; ctx.lineWidth=Math.max(2,CELL*0.06);
       cells(p.t,p.rot,p.x,gy).forEach(([x,y])=>{ if(y>=0) ctx.strokeRect(L.bx+x*CELL+CELL*.08,L.by+y*CELL+CELL*.08,CELL*.84,CELL*.84); });
@@ -798,6 +831,8 @@ Hub.add(10,'Nível inicial',openLevelSheet);
 $('tGhost').onclick=()=>{settings.ghost=!settings.ghost;saveSettings();refreshMenu();sfx.click();};
 $('tMusic').onclick=()=>{settings.music=!settings.music;saveSettings();refreshMenu();sfx.click();if(!settings.music)stopMusic();};
 $('tSound').onclick=()=>{settings.sound=!settings.sound;saveSettings();refreshMenu();sfx.click();};
+$('tutOk').onclick=()=>{sfx.click();Tut.event('ok');};
+$('tutSkip').onclick=()=>{sfx.click();Tut.skip();};
 $('bRetry').onclick=()=>{sfx.click();startGame(G?G.mode:1,G?G.opts:undefined);};
 $('bEndHome').onclick=()=>{sfx.click();goMenu();};
 $('pauseBtn').onclick=()=>{ if(state==='PLAY'){sfx.click();pauseGame();} };

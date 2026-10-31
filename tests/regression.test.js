@@ -499,7 +499,7 @@ test('Estratégia: limpar a linha do bloco-pergunta dispara a habilidade', () =>
   const G = h.G();
   fillRow(G, 19, [0, 1, 2, 3]);
   G.qBlock = { r: 19, c: 5 };
-  h.run(`Math.random=function(){return ${(6 + 0.5) / 9}}`); // SPEED_UP (constante: lockPiece consome randoms em burst() antes do sorteio)
+  h.forceRng((6 + 0.5) / 9); // SPEED_UP (constante)
   put(h, 'I', 0, 0, 18);
   h.sb.lockPiece();
   assert.equal(G.qBlock, null);

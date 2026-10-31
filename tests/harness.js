@@ -92,8 +92,9 @@ function load(seed = 1, store = {}, opts = {}) {
 
   h.sb = sandbox;                       // funções (function declarations) ficam no global
   h.run = (code) => vm.runInContext(code, sandbox);
-  // faz só a PRÓXIMA chamada de Math.random devolver v; as seguintes seguem a sequência semeada
-  h.forceNextRandom = (v) => vm.runInContext(`(function(){var o=Math.random,f=true;Math.random=function(){if(f){f=false;return ${v};}return o();};})()`, sandbox);
+  // faz só a PRÓXIMA sorteio de JOGO (G.rng) devolver v; os seguintes seguem a sequência semeada
+  h.forceNextRandom = (v) => vm.runInContext(`(function(){var o=G.rng,f=true;G.rng=function(){if(f){f=false;return ${v};}return o();};})()`, sandbox);
+  h.forceRng = (v) => vm.runInContext(`G.rng=function(){return ${v};}`, sandbox);
   h.get = (name) => vm.runInContext(name, sandbox); // const/let do script
   h.seed = (s) => vm.runInContext(seedSource(s), sandbox);
   h.G = () => vm.runInContext('G', sandbox);
