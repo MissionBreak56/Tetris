@@ -149,6 +149,7 @@
 <script src="js/history.js"></script>
 <script src="js/achv.js"></script>
 <script src="js/controls.js"></script>
+<script src="js/profiles.js"></script>
 <script src="js/skins.js"></script>
 <script src="js/themes.js"></script>
 <script src="js/settings.js"></script>
@@ -190,18 +191,25 @@ const POINTS={1:100,2:300,3:500,4:800};
 
 /* ================= PERSISTÊNCIA ================= */
 const readVol=k=>{ const v=parseFloat(LS(k)); return isFinite(v)?Math.min(1,Math.max(0,v)):1; };
-const settings={
+function readSettings(){ return {
   sound: LS('isSound')!=='0', music: LS('isMusic')!=='0',
   ghost: LS('isShowGhost')!=='0', vib: LS('isVabiration')==='1',
   touch: LS('isTouchControl')!=='0', theme: Theme.parseId(LS('index_bg')), skin: Skins.valid(LS('skin'))?LS('skin'):'classic',
   musicVol: readVol('musicVol'), sfxVol: readVol('sfxVol'), fx: LS('isFx')!=='0',
-  startLevel: 1
-};
+  startLevel: Math.min(15,Math.max(1,parseInt(LS('startLevel'),10)||1))
+}; }
+const settings=readSettings();
+/** Recarrega tudo que depende do perfil ativo (chamado ao trocar/excluir perfil). */
+function reloadProfileData(){
+  Object.assign(settings,readSettings());
+  Controls.load(); applyTheme(); refreshMenu(); resize();
+}
+Profile.onSwitch=()=>reloadProfileData();
 function saveSettings(){
   SV('isSound',settings.sound?1:0); SV('isMusic',settings.music?1:0);
   SV('isShowGhost',settings.ghost?1:0); SV('isVabiration',settings.vib?1:0);
   SV('isTouchControl',settings.touch?1:0); SV('index_bg',settings.theme); SV('skin',settings.skin);
-  SV('musicVol',settings.musicVol); SV('sfxVol',settings.sfxVol); SV('isFx',settings.fx?1:0);
+  SV('startLevel',settings.startLevel); SV('musicVol',settings.musicVol); SV('sfxVol',settings.sfxVol); SV('isFx',settings.fx?1:0);
 }
 
 /* ================= ÁUDIO (WebAudio) ================= */
@@ -672,6 +680,7 @@ function drawMenuHud(){
   ctx.save(); ctx.shadowColor='rgb('+T[3]+')'; ctx.shadowBlur=CELL*0.4;
   txt('SCORE',W/2,y,CELL*1.15,'#fff','center','500'); ctx.restore();
   txt('BEST '+(+(LS('bestScore')||0)),W/2,y+CELL*0.95,CELL*0.5,T[2],'center','600');
+  txt(Profile.cur().name,W/2,y+CELL*1.55,CELL*0.4,'rgba(255,255,255,.55)','center','500');
 }
 function drawHUD(){
   const sz=CELL*0.62, y=L.hudY;
