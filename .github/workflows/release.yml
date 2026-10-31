@@ -20,14 +20,28 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Restore keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+      - name: Prepare signing key
+        id: key
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "pass=$KS_PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "Sem secrets: gerando chave temporária (cada build terá assinatura diferente)"
+            P=$(openssl rand -hex 12)
+            keytool -genkeypair -keystore "$RUNNER_TEMP/release.jks" -alias tetris -keyalg RSA -keysize 2048 -validity 10000 -storepass "$P" -keypass "$P" -dname "CN=Tetris Proprio"
+            echo "::add-mask::$P"
+            echo "pass=$P" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build release APK
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/release.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ steps.key.outputs.pass }}
           KEY_ALIAS: tetris
-          KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ steps.key.outputs.pass }}
         run: gradle :app:assembleRelease --no-daemon
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk Tetris-${{ github.ref_name }}.apk
