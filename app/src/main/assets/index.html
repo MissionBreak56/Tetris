@@ -567,7 +567,7 @@ function drawBoard(){
   }
   const p=G.active;
   if(p&&state!=='OVER'){
-    const frac=(state==='PLAY'&&!G.soft&&!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid))?Math.min(1,G.fallAcc/interval()):0;
+    const frac=0; // descida de bloco em bloco, sem interpolação vertical
     if(settings.ghost){
       const gy=ghostY();
       ctx.strokeStyle='#2a86d6'; ctx.lineWidth=Math.max(2,CELL*0.06);
