@@ -10,7 +10,8 @@
   html,body{margin:0;height:100%;background:#05072a;color:#eaf0ff;
     font-family:'Segoe UI',Roboto,Arial,sans-serif;overflow:hidden;
     user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
-  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  #cv{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .sheetp canvas{position:static;width:100%;height:auto;max-width:100%}
   .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
     background:rgba(3,5,35,.78);z-index:20;touch-action:manipulation}
   .overlay.on{display:flex}
@@ -79,6 +80,11 @@
   #msg.m-skill{color:#b8ffd0;text-shadow:0 0 12px #2fff88,0 3px 12px #000}
   #tut{display:none;position:fixed;left:3%;right:3%;bottom:1.5%;z-index:12;padding:10px 12px;border-radius:14px;background:rgba(var(--btnbg),.94);border:2px solid var(--acc);box-shadow:0 0 14px rgba(var(--glow),.6);font-size:14px;line-height:1.35}
   #tut .tp{float:right;color:#ffd54a;font-weight:700;margin-left:8px}#tut .btn{width:auto;margin:6px 6px 0 0;padding:6px 14px;font-size:13px}
+  .skinrow{padding:8px;margin:8px 0;border:1px solid rgba(var(--glow),.35);border-radius:10px}.skinrow.sel{border-color:var(--acc);box-shadow:0 0 10px rgba(var(--glow),.5)}
+  .skinrow canvas{display:block;margin-top:4px;max-width:100%}.chips{display:flex;gap:3px;margin:4px 0}.chips i{flex:1;height:14px;border-radius:3px;border:1px solid rgba(255,255,255,.25)}
+  .txt{width:100%;box-sizing:border-box;background:rgba(0,0,0,.35);color:#fff;border:1px solid var(--acc);border-radius:8px;padding:8px;font-size:14px;margin:6px 0}
+  .prev{display:block;margin:6px auto;border-radius:8px;max-width:100%}.errs{font-size:12px;color:#ff9a9a;margin:6px 0;min-height:16px}.errs.ok{color:#8affb0}
+  input[type=color]{width:100%;height:30px;border:0;padding:0;background:none}.btn:disabled{opacity:.4}
   .hint{font-size:12px;color:#9fb4ee;margin-top:10px;line-height:1.6}
 
   /* ===== Tela inicial ===== */
@@ -143,6 +149,8 @@
 <script src="js/history.js"></script>
 <script src="js/achv.js"></script>
 <script src="js/controls.js"></script>
+<script src="js/skins.js"></script>
+<script src="js/themes.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/rules.js"></script>
 <script src="js/modes.js"></script>
@@ -161,11 +169,11 @@ const THEMES=[
  ['#5a1fa8','#12041f','#c39bff','150,80,255','70,20,150','28,10,66','#7a3fe0','#4a1a9e'],
  ['#12805a','#031a14','#62f2b8','30,200,140','10,110,80','4,40,30','#1fa070','#0d6a48'],
  ['#b8601c','#1f0d04','#ffb866','255,140,40','150,70,16','50,22,6','#e8802a','#a04a0c']];
-const TH=()=>THEMES[((settings.theme%THEMES.length)+THEMES.length)%THEMES.length];
-function applyTheme(){ const t=TH(), st=document.documentElement.style;
+const TH=()=>Theme.arr();
+function applyTheme(){ Theme.applyPieces(); const t=TH(), st=document.documentElement.style;
   st.setProperty('--acc',t[2]); st.setProperty('--glow',t[3]); st.setProperty('--dk',t[4]);
   st.setProperty('--btnbg',t[5]); st.setProperty('--b1',t[6]); st.setProperty('--b2',t[7]); }
-const COLORS={I:'#22b59a',J:'#2f62d6',L:'#e8892a',O:'#d9cc1a',S:'#3aa83a',T:'#b01fc0',Z:'#d93a3a'};
+const COLORS=Object.assign({},DEFAULT_PIECES);
 const SHAPES={
  I:{rot:[[[0,1],[1,1],[2,1],[3,1]],[[2,0],[2,1],[2,2],[2,3]],[[0,2],[1,2],[2,2],[3,2]],[[1,0],[1,1],[1,2],[1,3]]]},
  J:{rot:[[[0,0],[0,1],[1,1],[2,1]],[[1,0],[2,0],[1,1],[1,2]],[[0,1],[1,1],[2,1],[2,2]],[[1,0],[1,1],[0,2],[1,2]]]},
@@ -185,14 +193,14 @@ const readVol=k=>{ const v=parseFloat(LS(k)); return isFinite(v)?Math.min(1,Math
 const settings={
   sound: LS('isSound')!=='0', music: LS('isMusic')!=='0',
   ghost: LS('isShowGhost')!=='0', vib: LS('isVabiration')==='1',
-  touch: LS('isTouchControl')!=='0', theme: +(LS('index_bg')||0),
+  touch: LS('isTouchControl')!=='0', theme: Theme.parseId(LS('index_bg')), skin: Skins.valid(LS('skin'))?LS('skin'):'classic',
   musicVol: readVol('musicVol'), sfxVol: readVol('sfxVol'), fx: LS('isFx')!=='0',
   startLevel: 1
 };
 function saveSettings(){
   SV('isSound',settings.sound?1:0); SV('isMusic',settings.music?1:0);
   SV('isShowGhost',settings.ghost?1:0); SV('isVabiration',settings.vib?1:0);
-  SV('isTouchControl',settings.touch?1:0); SV('index_bg',settings.theme);
+  SV('isTouchControl',settings.touch?1:0); SV('index_bg',settings.theme); SV('skin',settings.skin);
   SV('musicVol',settings.musicVol); SV('sfxVol',settings.sfxVol); SV('isFx',settings.fx?1:0);
 }
 
@@ -570,23 +578,8 @@ function initBG(){
   BG.stars=Array.from({length:44},()=>({x:Math.random(),y:Math.random(),r:.6+Math.random()*1.8,v:.008+Math.random()*.03,a:.2+Math.random()*.55}));
   BG.fall=Array.from({length:9},()=>({t:pickT(),x:Math.random(),y:Math.random()*1.3-.2,r:(Math.random()*4)|0,rs:0,v:.025+Math.random()*.05,k:.55+Math.random()*.7}));
 }
-function shade(hex,f){
-  const n=parseInt(hex.slice(1),16); let r=n>>16,g=(n>>8)&255,b=n&255;
-  if(f>=0){r+=(255-r)*f;g+=(255-g)*f;b+=(255-b)*f;}else{r*=1+f;g*=1+f;b*=1+f;}
-  return 'rgb('+(r|0)+','+(g|0)+','+(b|0)+')';
-}
 function poly(pts){ ctx.beginPath(); ctx.moveTo(pts[0],pts[1]); for(let i=2;i<pts.length;i+=2) ctx.lineTo(pts[i],pts[i+1]); ctx.closePath(); ctx.fill(); }
-function drawBlock(x,y,s,color,alpha){
-  ctx.globalAlpha=alpha==null?1:alpha;
-  const b=Math.max(2,s*0.15);
-  ctx.fillStyle=color; ctx.fillRect(x,y,s,s);
-  ctx.fillStyle=shade(color,.5);  poly([x,y,x+s,y,x+s-b,y+b,x+b,y+b]);
-  ctx.fillStyle=shade(color,.25); poly([x,y,x+b,y+b,x+b,y+s-b,x,y+s]);
-  ctx.fillStyle=shade(color,-.28);poly([x+s,y,x+s,y+s,x+s-b,y+s-b,x+s-b,y+b]);
-  ctx.fillStyle=shade(color,-.5); poly([x,y+s,x+b,y+s-b,x+s-b,y+s-b,x+s,y+s]);
-  ctx.strokeStyle='rgba(0,0,0,.4)'; ctx.lineWidth=1; ctx.strokeRect(x+.5,y+.5,s-1,s-1);
-  ctx.globalAlpha=1;
-}
+function drawBlock(x,y,s,color,alpha){ Skins.draw(ctx,x,y,s,color,alpha); }
 function rr(x,y,w,h,r){ ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(x,y,w,h,r); else ctx.rect(x,y,w,h); }
 function txt(s,x,y,size,color,align,weight){
   ctx.font=(weight||'500')+' '+size+'px "Segoe UI",Roboto,Arial,sans-serif';
@@ -634,9 +627,9 @@ function drawFrame(){
   ctx.restore();
   ctx.strokeStyle=T[2]; ctx.lineWidth=CELL*0.07;
   rr(fl+pad*.5,ft+pad*.5,fr-fl-pad,fb-ft-pad,CELL*0.1); ctx.stroke();
-  const g=ctx.createLinearGradient(0,L.by,0,L.by+L.bh); g.addColorStop(0,'#000'); g.addColorStop(1,'#020721');
+  const g=ctx.createLinearGradient(0,L.by,0,L.by+L.bh); const X=Theme.extras(); g.addColorStop(0,X.board1); g.addColorStop(1,X.board2);
   ctx.fillStyle=g; ctx.fillRect(L.bx,L.by,L.bw,L.bh);
-  ctx.strokeStyle='rgba('+T[3]+',.30)'; ctx.lineWidth=1; ctx.beginPath();
+  ctx.strokeStyle='rgba('+X.grid+',.30)'; ctx.lineWidth=1; ctx.beginPath();
   for(let c=1;c<COLS;c++){ ctx.moveTo(L.bx+c*CELL+.5,L.by); ctx.lineTo(L.bx+c*CELL+.5,L.by+L.bh); }
   for(let r=1;r<ROWS;r++){ ctx.moveTo(L.bx,L.by+r*CELL+.5); ctx.lineTo(L.bx+L.bw,L.by+r*CELL+.5); }
   ctx.stroke();
@@ -724,7 +717,7 @@ function drawBoard(){
     const frac=0; // descida de bloco em bloco, sem interpolação vertical
     if(settings.ghost&&!G.rules.noGhost){
       const gy=ghostY();
-      ctx.strokeStyle='#2a86d6'; ctx.lineWidth=Math.max(2,CELL*0.06);
+      ctx.strokeStyle=Theme.extras().ghost; ctx.lineWidth=Math.max(2,CELL*0.06);
       cells(p.t,p.rot,p.x,gy).forEach(([x,y])=>{ if(y>=0) ctx.strokeRect(L.bx+x*CELL+CELL*.08,L.by+y*CELL+CELL*.08,CELL*.84,CELL*.84); });
     }
     if(FX.trail){ const t=FX.trail, a=t.t/t.max;
@@ -821,7 +814,7 @@ $('bTimed').onclick=()=>{sfx.click();startGame(2);};
 $('bStrategy').onclick=()=>{sfx.click();startGame(3);};
 $('bLevel').onclick=()=>{sfx.click();Hub.open();};
 $('sheetBack').onclick=()=>{sfx.click();Sheet.back();};
-$('bTheme').onclick=()=>{settings.theme=(settings.theme+1)%THEMES.length;saveSettings();applyTheme();sfx.click();};
+$('bTheme').onclick=()=>{const ids=Theme.ids(), i=ids.indexOf(settings.theme); settings.theme=ids[(i+1)%ids.length]; saveSettings(); applyTheme(); sfx.click();};
 function openLevelSheet(){
   Sheet.push('Nível inicial',(b)=>{
     const g=h('div',{class:'grid'});
