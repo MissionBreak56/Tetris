@@ -15,3 +15,11 @@ Teclado: setas, Z/X girar, Espaço queda dura, C hold, P pausa.
 
 ## Build
 O APK é compilado pelo GitHub Actions ao enviar uma tag `v*` (ver `.github/workflows/release.yml`).
+
+## Testes
+Testes de regressão da lógica do jogo (colisões, movimento, rotação, 7-bag, hold, ghost, linhas, pontuação, T-Spin, Back-to-Back, modos, persistência e controles). Carregam o `index.html` real em Node com DOM simulado e semente fixa — não exigem dependências:
+
+```
+node --test tests/*.test.js
+```
+O CI roda os testes em todo push/PR e só compila o APK se passarem.
