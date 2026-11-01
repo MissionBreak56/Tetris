@@ -69,7 +69,7 @@ function hardDrop(){
   const cols={};
   start.forEach(([x,y])=>{ cols[x]=Math.min(cols[x]??99,y); });
   const bottoms={}; end.forEach(([x,y])=>{ bottoms[x]=Math.max(bottoms[x]??-99,y); });
-  FX.trail={cols:Object.keys(cols).map(x=>({x:+x,y0:cols[x],y1:bottoms[x]})),color:COLORS[p.t],t:.25,max:.25};
+  FX.trail={cols:Object.keys(cols).map(x=>({x:+x,y0:cols[x],y1:bottoms[x]})),color:COLORS[p.t],t:.25,max:.25,b:G.vi};
   FX.shake=Math.max(FX.shake,CELL*0.1);
   sfx.dropFast(); vib(30); lockPiece();
 }
@@ -112,7 +112,7 @@ function lockPiece(){
   if(cs.some(([,y])=>y<0)){
     if(G.rules.topout==='reset'){ G.grid=newGrid(); G.rowOff.fill(0); FX.pulse=1; if(!G.rules.tutorial) showMsg2('ZEN RESET'); spawn(); return; }
     gameOver(); return; }
-  cs.forEach(([x,y])=>{ G.grid[y][x]=COLORS[p.t]; FX.lock.push({x,y,t:.28}); });
+  cs.forEach(([x,y])=>{ G.grid[y][x]=COLORS[p.t]; FX.lock.push({x,y,t:.28,b:G.vi}); });
   const tspin=isTSpin(p,G.grid);
   sfx.drop();
   const cleared=[];
@@ -124,7 +124,7 @@ function lockPiece(){
   if(tspin) G.tspins++;
   const skill=!!(G.qBlock&&cleared.includes(G.qBlock.r));
   if(n){
-    cleared.forEach(r=>{ FX.flash.push({r,t:.34});
+    cleared.forEach(r=>{ FX.flash.push({r,t:.34,b:G.vi});
       for(let c=0;c<COLS;c++) burst(c,r,G.grid[r][c],n>=4?4:2); });
     const keep=[]; for(let r=0;r<ROWS;r++) if(!cleared.includes(r)) keep.push(r);
     const ng=newGrid(), off=Array(ROWS).fill(0);
@@ -143,7 +143,8 @@ function lockPiece(){
   else if(n>0){base=POINTS[n];name=['','SINGLE','DOUBLE','TRIPLE','TETRIS'][n];}
   let pts=base*G.level*G.mult;
   const special=(n===4)||tspin;
-  if(special&&n>0&&G.b2b){pts*=1.5;name='BACK TO BACK '+name;}
+  const gotB2B=special&&n>0&&G.b2b;
+  if(gotB2B){pts*=1.5;name='BACK TO BACK '+name;}
   if(special) G.b2b=true; else if(n>0) G.b2b=false;
   if(n>0||tspin){ G.score+=Math.round(pts); showMsg(name); (n>=4?sfx.tetris:sfx.line)(); vib(40); }
   if(pcl) showMsg2('PERFECT CLEAR'); else if(G.combo>=2) showMsg2('COMBO x'+G.combo);
@@ -154,6 +155,7 @@ function lockPiece(){
   G.lines+=n;
   while(G.rules.levelUps&&G.lines>=10*G.level&&G.level<30){ G.level++; showMsg('LEVEL '+G.level); FX.pulse=1; }
   if(n>0) tutEv('line');
+  if(G.versus) Versus.onLock({n,tspin,b2b:gotB2B,perfect:pcl});
   if(checkGoal()) return;
   if(!G.over) spawn();
 }

@@ -599,3 +599,15 @@ test('toque: gestos sobre botões/overlays são ignorados', () => {
   h.now = 50; h.fire('pointerup', { pointerId: 1, clientX: 300, clientY: 400 });
   assert.equal(h.G().active.rot, 0);
 });
+
+/* ---------------- Geometria das rotações (corrige defeito: S em rotação 2 virava Z) ---------------- */
+test('geometria: as 4 rotações de cada peça são a MESMA forma girada 90° (nenhuma peça muda de formato)', () => {
+  const h = load(1); const SH = plain(h.get('SHAPES'));
+  const norm = (cs) => { const mx = Math.min(...cs.map((c) => c[0])), my = Math.min(...cs.map((c) => c[1])); return cs.map(([x, y]) => [x - mx, y - my]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).join(';'); };
+  const rot90 = (cs) => cs.map(([x, y]) => [-y, x]);
+  for (const t of PIECES) {
+    let cur = SH[t].rot[0];
+    for (let k = 1; k < 4; k++) { cur = rot90(cur); assert.equal(norm(SH[t].rot[k]), norm(cur), `${t} rotação ${k}`); }
+    assert.equal(SH[t].rot.length, 4);
+  }
+});

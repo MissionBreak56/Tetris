@@ -1,7 +1,7 @@
 'use strict';
 /* Replays determinísticos: grava só as AÇÕES do jogador (com o tick da simulação) + semente + regras.
    Reproduzir = recriar a partida e reaplicar as ações. Validar = simular sem tela e comparar o resultado. */
-const ENGINE_VERSION = 'E1';      // aumente SEMPRE que qualquer regra do motor mudar (replays antigos deixam de ser válidos)
+const ENGINE_VERSION = 'E2';      // aumente SEMPRE que qualquer regra do motor mudar (replays antigos deixam de ser válidos)
 let SIM = false;                  // true durante simulação silenciosa (sem som/vibração/mensagens)
 const fnv = (s) => { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return (x >>> 0).toString(16); };
 

@@ -41,7 +41,7 @@ test('replay: simular não altera o estado atual do app nem grava nada', () => {
 });
 test('replay GOLDEN: resultado fixo da versão do motor (se falhar, aumente ENGINE_VERSION)', () => {
   const h = load(1); const rep = scripted(h, 1, 177, 2400);
-  assert.equal(h.get('ENGINE_VERSION'), 'E1');
+  assert.equal(h.get('ENGINE_VERSION'), 'E2');
   assert.deepEqual(rep.res, { score: GOLD.score, lines: GOLD.lines, level: GOLD.level, ms: GOLD.ms });
   assert.equal(rep.ticks, GOLD.ticks);
 });

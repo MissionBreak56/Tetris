@@ -15,6 +15,7 @@ function loop(t){
   if(idleSkip()) return;
   const dt=Math.min(0.1,(t-last)/1000||0); last=t;
   if(state==='REPLAY'){ Replay.frame(dt); updateFx(dt); render(); return; }
+  if(Versus.active){ if(state==='VERSUS') Versus.frame(dt); updateFx(dt); render(); return; }
   acc+=dt; let n=0;
   while(acc>=STEP&&n<6){ update(STEP); acc-=STEP; n++; }   // passo fixo => simulação determinística (replays)
   if(n===6) acc=0;

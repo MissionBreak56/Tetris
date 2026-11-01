@@ -32,12 +32,12 @@ $('tutOk').onclick=()=>{sfx.click();Tut.event('ok');};
 $('tutSkip').onclick=()=>{sfx.click();Tut.skip();};
 $('bRetry').onclick=()=>{sfx.click();startGame(G?G.mode:1,G?G.opts:undefined);};
 $('bEndHome').onclick=()=>{sfx.click();goMenu();};
-$('pauseBtn').onclick=()=>{ if(state==='PLAY'){sfx.click();pauseGame();} };
+$('pauseBtn').onclick=()=>{ if(state==='PLAY'||state==='VERSUS'){sfx.click();pauseGame();} };
 document.addEventListener('visibilitychange',()=>{ if(document.hidden) pauseGame(); });
 
 function msgClass(t){ return /TETRIS/.test(t)&&!/T-SPIN/.test(t)?'m-tetris':/T-SPIN/.test(t)?'m-tspin':/BACK TO BACK/.test(t)?'m-b2b':/^LEVEL/.test(t)?'m-level':/^(SINGLE|DOUBLE|TRIPLE)/.test(t)?'m-lines':SKILLS.includes(t)?'m-skill':''; }
-function showMsg(t){ if(SIM) return; const m=$('msg'); m.textContent=t; m.className=msgClass(t); restartAnim(m,'pop'); }
-function showMsg2(t){ if(SIM) return; const m=$('msg2'); m.textContent=t; m.className=/PERFECT/.test(t)?'m-perfect':''; restartAnim(m,'pop'); }
+function showMsg(t){ if(SIM) return; if(Versus.attachNote(t)) return; const m=$('msg'); m.textContent=t; m.className=msgClass(t); restartAnim(m,'pop'); }
+function showMsg2(t){ if(SIM) return; if(Versus.attachNote(t)) return; const m=$('msg2'); m.textContent=t; m.className=/PERFECT/.test(t)?'m-perfect':''; restartAnim(m,'pop'); }
 
 /* ================= INIT ================= */
 applyTheme(); initBG(); resize(); addEventListener('resize',resize);

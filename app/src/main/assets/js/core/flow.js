@@ -7,6 +7,7 @@ function hideAll(){ ['menu','sheet','confirmBox','pausePanel','endPanel'].forEac
 function restartAnim(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
 
 function startGame(mode,opts){
+  if(mode===8){ Versus.start(opts.cfg); return; }
   try{ac();}catch(e){} hideAll(); showTutBanner(false); newGame(mode,opts);
   $('pauseBtn').style.display='flex';
   let n=3; state='COUNT';
@@ -18,7 +19,7 @@ function startGame(mode,opts){
 }
 function gameOver(reason){
   if(!G||G.overDone) return; G.overDone=true;
-  if(G.replay) return;                      // reprodução/validação de replay: não grava nada nem mostra painel
+  if(G.replay||G.versus) return;            // replay/versus: quem encerra e grava é o respectivo controlador
   state='OVER'; G.overT=0; stopMusic(); sfx.gameover(); vib([80,60,80]);
   FX.shake=CELL*0.4;
   const res=Results.compile(G,reason), rec=Results.commit(res);
@@ -26,19 +27,21 @@ function gameOver(reason){
   $('pauseBtn').style.display='none';
   setTimeout(()=>{ if(state==='OVER') show('endPanel'); },1100);
 }
+let pauseFrom='PLAY';
 function pauseGame(){
-  if(state!=='PLAY') return;
+  if(state!=='PLAY'&&state!=='VERSUS') return;
+  pauseFrom=state; if(Versus.active) Versus.B.forEach(g=>{ g.soft=false; });
   if(G&&G.soft) act(A.SOFT_OFF);
   state='PAUSED'; stopMusic(); if(G) G.soft=false; tS=null;
   try{ if(AC&&AC.suspend) AC.suspend(); }catch(e){}
   renderPause(); show('pausePanel');
 }
-function resumeGame(){ hide('pausePanel'); hide('confirmBox'); state='PLAY'; try{ac();}catch(e){} startMusic(); }
+function resumeGame(){ hide('pausePanel'); hide('confirmBox'); state=pauseFrom; try{ac();}catch(e){} startMusic(); }
 /** Botão Voltar do Android: fecha confirmação > folha > pausa/retoma > sai do replay. */
 function handleBack(){
   if($('confirmBox').classList.contains('on')){ hide('confirmBox'); return; }
   if($('sheet').classList.contains('on')){ Sheet.back(); return; }
-  if(state==='PLAY') pauseGame(); else if(state==='PAUSED') resumeGame(); else if(state==='REPLAY') goMenu();
+  if(state==='PLAY'||state==='VERSUS') pauseGame(); else if(state==='PAUSED') resumeGame(); else if(state==='REPLAY') goMenu();
 }
 function renderPause(){
   const b=$('pauseBody'); clearEl(b);
@@ -60,12 +63,12 @@ function leaveGame(){
   if(G&&G.rules&&G.rules.recordOnExit&&!G.overDone&&G.ms>3000){ G.overDone=true; Results.commit(Results.compile(G,'exit')); }
   goMenu();
 }
-function goMenu(){ state='MENU'; stopMusic(); G=null; hideAll(); show('menu'); showTutBanner(false); Replay.stop();
+function goMenu(){ state='MENU'; stopMusic(); G=null; hideAll(); show('menu'); showTutBanner(false); Replay.stop(); Versus.stop();
   $('pauseBtn').style.display='none'; canvas.style.filter=''; }
 
 /* ================= UPDATE ================= */
 function update(dt){
-  if((state!=='PLAY'&&state!=='REPLAY')||!G||G.over) return;
+  if((state!=='PLAY'&&state!=='REPLAY'&&state!=='VERSUS')||!G||G.over) return;
   G.ms+=dt*1000; G.tick++;
   if(G.speedT>0){ G.speedT-=dt; if(G.speedT<=0) G.speed=1; }
   if(G.blurT>0){ G.blurT-=dt; if(G.blurT<=0) canvas.style.filter=''; }

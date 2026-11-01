@@ -16,6 +16,7 @@ const Achv = {
     { id: 'perfect', name: 'Perfect Clear', desc: 'Esvazie o tabuleiro inteiro', goal: 1, val: (s) => s.all.perfect },
     { id: 'score_10k', name: '10.000 pontos', desc: 'Faça 10.000 pontos em uma partida', goal: 10000, val: (s) => s.all.bestScore },
     { id: 'score_100k', name: '100.000 pontos', desc: 'Faça 100.000 pontos em uma partida', goal: 100000, val: (s) => s.all.bestScore },
+    { id: 'versus_win', name: 'Vencedor do Versus', desc: 'Vença uma partida Versus contra a IA', goal: 1, val: (s) => (s.modes[8] ? s.modes[8].wins : 0) },
     { id: 'sprint', name: 'Sprint concluído', desc: 'Complete um Sprint de 40 linhas', goal: 1, val: (s) => (s.modes[5] ? s.modes[5].wins : 0) },
   ],
   load() { const d = Store.getJSON('achv', {}); return d && typeof d === 'object' && !Array.isArray(d) ? d : {}; },
