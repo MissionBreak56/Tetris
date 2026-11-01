@@ -38,6 +38,7 @@ const Results = {
     r.missions = Missions.doneIds(StatsMgr.load()).filter((id) => !before.includes(id)).map((id) => Missions.nameOf(id));
     History.add(this.entry(r));
     const rec = Records.update(r);
+    r.rank = Ranking.submit(r);
     return rec;
   },
   render(r, rec) {
@@ -54,6 +55,7 @@ const Results = {
     box.appendChild(kv('Linhas', r.lines));
     box.appendChild(kv('Duração', fmtMsP(r.ms)));
     if (rec.tracked) box.appendChild(kv(sprint ? 'Melhor tempo' : 'Best Score', sprint ? (rec.best ? fmtMsP(rec.best) : '—') : fmtNum(rec.best)));
+    if (r.rank) box.appendChild(h('div', { class: 'newrec', text: '🏅 ' + r.rank + 'º lugar no ranking local' }));
     if (r.dailyRec && r.dailyRec.first) box.appendChild(h('div', { class: 'newrec', text: '📅 Desafio diário concluído! +1 ⭐' }));
     (r.missions || []).forEach((n) => box.appendChild(h('div', { class: 'newrec', text: '🎯 Missão concluída: ' + n })));
     (r.unlocked || []).forEach((a) => box.appendChild(h('div', { class: 'newrec', text: '🏆 Conquista: ' + a.name })));

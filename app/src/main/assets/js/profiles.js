@@ -41,6 +41,7 @@ const Profile = {
   remove(id) {
     if (this.state.list.length <= 1 || !this.state.list.some((p) => p.id === id)) return false;
     const pre = this.prefixFor(id);
+    if (typeof Ranking !== 'undefined') Ranking.removeProfile(id);
     Store.KEYS.forEach((k) => { try { localStorage.removeItem(pre + k); } catch (e) {} });
     this.state.list = this.state.list.filter((p) => p.id !== id);
     if (this.state.current === id) { this.state.current = this.state.list[0].id; Store.prefix = this.prefixFor(this.state.current); this.save(); if (this.onSwitch) this.onSwitch(); } else this.save();
