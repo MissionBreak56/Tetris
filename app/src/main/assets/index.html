@@ -86,6 +86,8 @@
   .prev{display:block;margin:6px auto;border-radius:8px;max-width:100%}.errs{font-size:12px;color:#ff9a9a;margin:6px 0;min-height:16px}.errs.ok{color:#8affb0}
   input[type=color]{width:100%;height:30px;border:0;padding:0;background:none}.btn:disabled{opacity:.4}
   .spark{display:flex;align-items:flex-end;gap:3px;height:64px;margin:6px 0}.spark i{flex:1;background:var(--acc);border-radius:2px 2px 0 0;min-width:3px}
+  #rpBar{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:1.5%;z-index:12;gap:8px;align-items:center;padding:6px 10px;border-radius:14px;background:rgba(var(--btnbg),.94);border:2px solid var(--acc)}
+  #rpBar .btn{width:auto;margin:0;padding:8px 14px;font-size:15px}
   .hint{font-size:12px;color:#9fb4ee;margin-top:10px;line-height:1.6}
 
   /* ===== Tela inicial ===== */
@@ -116,6 +118,7 @@
 <body>
 <canvas id="cv"></canvas>
 <button id="pauseBtn"><i></i><i></i></button>
+<div id="rpBar"><button class="btn small" id="rpPlay">❚❚</button><button class="btn small" id="rpSpeed">×1</button><button class="btn small" id="rpExit">Sair</button></div>
 <div id="tut"><span class="tp" id="tutProg"></span><span id="tutText"></span><br><button class="btn small" id="tutOk">Entendi</button><button class="btn small" id="tutSkip">Pular tutorial</button></div>
 <div id="msg"></div>
 <div id="msg2"></div>
@@ -150,7 +153,9 @@
 <script src="js/history.js"></script>
 <script src="js/achv.js"></script>
 <script src="js/controls.js"></script>
+<script src="js/native.js"></script>
 <script src="js/actions.js"></script>
+<script src="js/replay.js"></script>
 <script src="js/analysis.js"></script>
 <script src="js/ranking.js"></script>
 <script src="js/profiles.js"></script>
@@ -221,6 +226,7 @@ let AC=null, musicTimer=null, musicStep=0;
 function ac(){ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended'&&AC.resume) AC.resume(); return AC; }
 function tone(f,d,type,vol,slide,cat){
   const music=cat==='music';
+  if(SIM) return;
   if(music?!settings.music:!settings.sound) return;
   const vv=(vol||0.12)*(music?settings.musicVol:settings.sfxVol);
   if(vv<0.0005) return;
@@ -287,7 +293,7 @@ function newGame(mode,opts){
   const seed=opts.seed!=null?(opts.seed>>>0):((Math.random()*4294967296)>>>0);
   const rules=rulesFor(mode,opts);
   G={ mode, opts, rules, seed, rng:mkRng(seed), grid:newGrid(), queue:[], active:null, held:null, canHold:true,
-      level:rules.fixedLevel||settings.startLevel, lines:0, score:0, disp:0, mult:1,
+      level:rules.fixedLevel||settings.startLevel, sl:settings.startLevel, replay:false, lines:0, score:0, disp:0, mult:1,
       fallAcc:0, lockT:0, soft:false, lastRot:false,
       speed:1, speedT:0, blurT:0, qBlock:null, qCounter:0, qThreshold:10,
       timeLeft:rules.timeLimit||120, timeAcc:0, b2b:false, over:false, rowOff:Array(ROWS).fill(0), overT:0,
@@ -472,6 +478,7 @@ function startGame(mode,opts){
 }
 function gameOver(reason){
   if(!G||G.overDone) return; G.overDone=true;
+  if(G.replay) return;                      // reprodução/validação de replay: não grava nada nem mostra painel
   state='OVER'; G.overT=0; stopMusic(); sfx.gameover(); vib([80,60,80]);
   FX.shake=CELL*0.4;
   const res=Results.compile(G,reason), rec=Results.commit(res);
@@ -487,6 +494,12 @@ function pauseGame(){
   renderPause(); show('pausePanel');
 }
 function resumeGame(){ hide('pausePanel'); hide('confirmBox'); state='PLAY'; try{ac();}catch(e){} startMusic(); }
+/** Botão Voltar do Android: fecha confirmação > folha > pausa/retoma > sai do replay. */
+function handleBack(){
+  if($('confirmBox').classList.contains('on')){ hide('confirmBox'); return; }
+  if($('sheet').classList.contains('on')){ Sheet.back(); return; }
+  if(state==='PLAY') pauseGame(); else if(state==='PAUSED') resumeGame(); else if(state==='REPLAY') goMenu();
+}
 function renderPause(){
   const b=$('pauseBody'); clearEl(b);
   if(G){ [kv('Modo',MODE_NAMES[G.mode]||'?'),kv('Score',fmtNum(G.score)),kv('Nível',G.level),kv('Linhas',G.lines),kv('Tempo',fmtMsP(G.ms))].forEach(r=>b.appendChild(r)); }
@@ -507,12 +520,12 @@ function leaveGame(){
   if(G&&G.rules&&G.rules.recordOnExit&&!G.overDone&&G.ms>3000){ G.overDone=true; Results.commit(Results.compile(G,'exit')); }
   goMenu();
 }
-function goMenu(){ state='MENU'; stopMusic(); G=null; hideAll(); show('menu'); showTutBanner(false);
+function goMenu(){ state='MENU'; stopMusic(); G=null; hideAll(); show('menu'); showTutBanner(false); Replay.stop();
   $('pauseBtn').style.display='none'; canvas.style.filter=''; }
 
 /* ================= UPDATE ================= */
 function update(dt){
-  if(state!=='PLAY'||!G||G.over) return;
+  if((state!=='PLAY'&&state!=='REPLAY')||!G||G.over) return;
   G.ms+=dt*1000; G.tick++;
   if(G.speedT>0){ G.speedT-=dt; if(G.speedT<=0) G.speed=1; }
   if(G.blurT>0){ G.blurT-=dt; if(G.blurT<=0) canvas.style.filter=''; }
@@ -680,6 +693,7 @@ function drawLogo(){
     ctx.restore(); cx+=(ws[i]+gap)*sc; });
   ctx.restore();
 }
+function drawReplayHud(){ const c=Replay.cur; if(!c) return; txt((c.done?'FIM DO REPLAY':'▶ REPLAY')+(c.paused?' · PAUSADO':' ×'+c.speed),W/2,L.fb+CELL*0.9,CELL*0.55,'#ffd54a','center','700'); }
 function drawMenuHud(){
   const y=L.hudY, T=TH();
   ctx.save(); ctx.shadowColor='rgb('+T[3]+')'; ctx.shadowBlur=CELL*0.4;
@@ -749,7 +763,7 @@ function render(){
   drawBackground();
   ctx.save();
   if(FX.shake>0) ctx.translate((Math.random()-.5)*FX.shake*2,(Math.random()-.5)*FX.shake*2);
-  if(G&&state!=='MENU'){ drawFrame(); drawBoard(); drawHUD(); }
+  if(G&&state!=='MENU'){ drawFrame(); drawBoard(); drawHUD(); if(state==='REPLAY') drawReplayHud(); }
   else if(state==='MENU'){ drawFrame(); drawLogo(); drawMenuHud(); }
   FX.parts.forEach(q=>{ ctx.globalAlpha=Math.max(0,q.life/q.max); ctx.fillStyle=q.color; ctx.fillRect(q.x-q.size/2,q.y-q.size/2,q.size,q.size); });
   ctx.globalAlpha=1;
@@ -763,6 +777,7 @@ let acc=0;
 function loop(t){
   requestAnimationFrame(loop);
   const dt=Math.min(0.1,(t-last)/1000||0); last=t;
+  if(state==='REPLAY'){ Replay.frame(dt); updateFx(dt); render(); return; }
   acc+=dt; let n=0;
   while(acc>=STEP&&n<6){ update(STEP); acc-=STEP; n++; }   // passo fixo => simulação determinística (replays)
   if(n===6) acc=0;
@@ -844,6 +859,9 @@ Hub.add(10,'Nível inicial',openLevelSheet);
 $('tGhost').onclick=()=>{settings.ghost=!settings.ghost;saveSettings();refreshMenu();sfx.click();};
 $('tMusic').onclick=()=>{settings.music=!settings.music;saveSettings();refreshMenu();sfx.click();if(!settings.music)stopMusic();};
 $('tSound').onclick=()=>{settings.sound=!settings.sound;saveSettings();refreshMenu();sfx.click();};
+$('rpPlay').onclick=()=>{sfx.click();Replay.toggle();};
+$('rpSpeed').onclick=()=>{sfx.click();Replay.speed();};
+$('rpExit').onclick=()=>{sfx.click();goMenu();};
 $('tutOk').onclick=()=>{sfx.click();Tut.event('ok');};
 $('tutSkip').onclick=()=>{sfx.click();Tut.skip();};
 $('bRetry').onclick=()=>{sfx.click();startGame(G?G.mode:1,G?G.opts:undefined);};
@@ -852,8 +870,8 @@ $('pauseBtn').onclick=()=>{ if(state==='PLAY'){sfx.click();pauseGame();} };
 document.addEventListener('visibilitychange',()=>{ if(document.hidden) pauseGame(); });
 
 function msgClass(t){ return /TETRIS/.test(t)&&!/T-SPIN/.test(t)?'m-tetris':/T-SPIN/.test(t)?'m-tspin':/BACK TO BACK/.test(t)?'m-b2b':/^LEVEL/.test(t)?'m-level':/^(SINGLE|DOUBLE|TRIPLE)/.test(t)?'m-lines':SKILLS.includes(t)?'m-skill':''; }
-function showMsg(t){ const m=$('msg'); m.textContent=t; m.className=msgClass(t); restartAnim(m,'pop'); }
-function showMsg2(t){ const m=$('msg2'); m.textContent=t; m.className=/PERFECT/.test(t)?'m-perfect':''; restartAnim(m,'pop'); }
+function showMsg(t){ if(SIM) return; const m=$('msg'); m.textContent=t; m.className=msgClass(t); restartAnim(m,'pop'); }
+function showMsg2(t){ if(SIM) return; const m=$('msg2'); m.textContent=t; m.className=/PERFECT/.test(t)?'m-perfect':''; restartAnim(m,'pop'); }
 
 /* ================= INIT ================= */
 applyTheme(); initBG(); resize(); addEventListener('resize',resize);

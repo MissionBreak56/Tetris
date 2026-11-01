@@ -39,6 +39,7 @@ const Results = {
     History.add(this.entry(r));
     const rec = Records.update(r);
     r.rank = Ranking.submit(r);
+    if (typeof G !== 'undefined' && G) Replays.capture(G);
     return rec;
   },
   render(r, rec) {
