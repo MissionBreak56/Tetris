@@ -5,13 +5,16 @@ const Profile = {
   MAX: 5, state: null, onSwitch: null,
   prefixFor(id) { return id === 'p1' ? 'tetris_' : 'tetris_' + id + '_'; },
   cleanName(n) { return String(n == null ? '' : n).replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16); },
-  load() {
-    const d = Store.ggetJSON('profiles', null);
+  /** Valida/normaliza o estado salvo (puro). Sempre devolve um estado utilizável. */
+  parse(d) {
     let list = d && Array.isArray(d.list) ? d.list.filter((p) => p && /^p\d+$/.test(p.id) && this.cleanName(p.name)).map((p) => ({ id: p.id, name: this.cleanName(p.name) })) : [];
     const seen = new Set(); list = list.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true))).slice(0, this.MAX);
     if (!list.length) list = [{ id: 'p1', name: 'Jogador 1' }];
     const maxId = list.reduce((m, p) => Math.max(m, parseInt(p.id.slice(1), 10)), 0);
-    this.state = { list, current: d && list.some((p) => p.id === d.current) ? d.current : list[0].id, next: Math.max(num(d && d.next, 0), maxId + 1) };
+    return { list, current: d && list.some((p) => p.id === d.current) ? d.current : list[0].id, next: Math.max(num(d && d.next, 0), maxId + 1) };
+  },
+  load() {
+    this.state = this.parse(Store.ggetJSON('profiles', null));
     Store.prefix = this.prefixFor(this.state.current);
     return this.state;
   },

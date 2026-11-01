@@ -17,7 +17,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 public class MainActivity extends Activity {
-    private static final int REQ_SAVE = 101, REQ_OPEN = 102, MAX_READ = 2000000;
+    private static final int REQ_SAVE = 101, REQ_OPEN = 102, MAX_READ = 8000000;
     private WebView web;
     private String pendingSave;
 

@@ -13,7 +13,7 @@ const Native = {
     this._picked = cb;
     if (this.available()) { AndroidBridge.pickFile(); return; }
     const i = document.createElement('input'); i.type = 'file';
-    i.onchange = () => { const f = i.files && i.files[0]; if (!f) { cb(null, 'Nenhum arquivo'); return; } if (f.size > 2000000) { cb(null, 'Arquivo muito grande'); return; } const r = new FileReader(); r.onload = () => cb(String(r.result), null); r.onerror = () => cb(null, 'Falha ao ler'); r.readAsText(f); };
+    i.onchange = () => { const f = i.files && i.files[0]; if (!f) { cb(null, 'Nenhum arquivo'); return; } if (f.size > 8000000) { cb(null, 'Arquivo muito grande'); return; } const r = new FileReader(); r.onload = () => cb(String(r.result), null); r.onerror = () => cb(null, 'Falha ao ler'); r.readAsText(f); };
     i.click();
   },
   /* chamados pelo Java */
