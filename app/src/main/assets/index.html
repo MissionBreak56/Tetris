@@ -85,6 +85,7 @@
   .txt{width:100%;box-sizing:border-box;background:rgba(0,0,0,.35);color:#fff;border:1px solid var(--acc);border-radius:8px;padding:8px;font-size:14px;margin:6px 0}
   .prev{display:block;margin:6px auto;border-radius:8px;max-width:100%}.errs{font-size:12px;color:#ff9a9a;margin:6px 0;min-height:16px}.errs.ok{color:#8affb0}
   input[type=color]{width:100%;height:30px;border:0;padding:0;background:none}.btn:disabled{opacity:.4}
+  .spark{display:flex;align-items:flex-end;gap:3px;height:64px;margin:6px 0}.spark i{flex:1;background:var(--acc);border-radius:2px 2px 0 0;min-width:3px}
   .hint{font-size:12px;color:#9fb4ee;margin-top:10px;line-height:1.6}
 
   /* ===== Tela inicial ===== */
@@ -149,6 +150,8 @@
 <script src="js/history.js"></script>
 <script src="js/achv.js"></script>
 <script src="js/controls.js"></script>
+<script src="js/actions.js"></script>
+<script src="js/analysis.js"></script>
 <script src="js/profiles.js"></script>
 <script src="js/skins.js"></script>
 <script src="js/themes.js"></script>
@@ -287,7 +290,7 @@ function newGame(mode,opts){
       fallAcc:0, lockT:0, soft:false, lastRot:false,
       speed:1, speedT:0, blurT:0, qBlock:null, qCounter:0, qThreshold:10,
       timeLeft:rules.timeLimit||120, timeAcc:0, b2b:false, over:false, rowOff:Array(ROWS).fill(0), overT:0,
-      combo:0, maxCombo:0, tetrises:0, tspins:0, perfect:0, pieces:0, actions:0, ms:0 };
+      combo:0, maxCombo:0, tetrises:0, tspins:0, perfect:0, pieces:0, actions:0, ms:0, tick:0, rec:rules.tutorial?null:[] };
   refill(G.queue); refill(G.queue);
   FX.parts.length=0; FX.flash.length=0; FX.lock.length=0; FX.trail=null; FX.shake=0; FX.pulse=0; FX.screen=null;
   spawn();
@@ -477,6 +480,7 @@ function gameOver(reason){
 }
 function pauseGame(){
   if(state!=='PLAY') return;
+  if(G&&G.soft) act(A.SOFT_OFF);
   state='PAUSED'; stopMusic(); if(G) G.soft=false; tS=null;
   try{ if(AC&&AC.suspend) AC.suspend(); }catch(e){}
   renderPause(); show('pausePanel');
@@ -508,7 +512,7 @@ function goMenu(){ state='MENU'; stopMusic(); G=null; hideAll(); show('menu'); s
 /* ================= UPDATE ================= */
 function update(dt){
   if(state!=='PLAY'||!G||G.over) return;
-  G.ms+=dt*1000;
+  G.ms+=dt*1000; G.tick++;
   if(G.speedT>0){ G.speedT-=dt; if(G.speedT<=0) G.speed=1; }
   if(G.blurT>0){ G.blurT-=dt; if(G.blurT<=0) canvas.style.filter=''; }
   if(G.rules.tutorial){ Tut.tick(); if(!G) return; }
@@ -754,27 +758,31 @@ function render(){
 
 /* ================= LOOP ================= */
 let last=0;
+let acc=0;
 function loop(t){
   requestAnimationFrame(loop);
-  const dt=Math.min(0.05,(t-last)/1000||0); last=t;
-  update(dt); updateFx(dt); render();
+  const dt=Math.min(0.1,(t-last)/1000||0); last=t;
+  acc+=dt; let n=0;
+  while(acc>=STEP&&n<6){ update(STEP); acc-=STEP; n++; }   // passo fixo => simulação determinística (replays)
+  if(n===6) acc=0;
+  updateFx(dt); render();
 }
 
 /* ================= INPUT: TECLADO ================= */
 addEventListener('keydown',e=>{
   if(state!=='PLAY'){ if((e.key==='p'||e.key==='P'||e.key==='Escape')&&state==='PAUSED') resumeGame(); return; }
   const k=e.key;
-  if(k==='ArrowLeft') move(-1);
-  else if(k==='ArrowRight') move(1);
-  else if(k==='ArrowDown') G.soft=true;
-  else if(k==='ArrowUp'||k==='x'||k==='X') rotate(1);
-  else if(k==='z'||k==='Z') rotate(-1);
-  else if(k===' '){ e.preventDefault(); hardDrop(); }
-  else if(k==='c'||k==='C'||k==='Shift') hold();
+  if(k==='ArrowLeft') act(A.LEFT);
+  else if(k==='ArrowRight') act(A.RIGHT);
+  else if(k==='ArrowDown'){ if(!G.soft) act(A.SOFT_ON); }
+  else if(k==='ArrowUp'||k==='x'||k==='X') act(A.CW);
+  else if(k==='z'||k==='Z') act(A.CCW);
+  else if(k===' '){ e.preventDefault(); act(A.HARD); }
+  else if(k==='c'||k==='C'||k==='Shift') act(A.HOLD);
   else if(k==='p'||k==='P'||k==='Escape') pauseGame();
   if(['ArrowLeft','ArrowRight','ArrowDown','ArrowUp',' '].includes(k)) e.preventDefault();
 });
-addEventListener('keyup',e=>{ if(e.key==='ArrowDown'&&G) G.soft=false; });
+addEventListener('keyup',e=>{ if(e.key==='ArrowDown'&&G&&G.soft) act(A.SOFT_OFF); });
 
 /* ================= INPUT: GESTOS (tela inteira) ================= */
 let tS=null;
@@ -788,10 +796,10 @@ addEventListener('pointermove',e=>{
   const step=CELL*0.9/Controls.cfg.sens, sd=1/Controls.cfg.soft;
   let dx=e.clientX-tS.x, guard=0;
   while(Math.abs(dx)>=step&&guard++<6){
-    const s=dx>0?1:-1; move(s); tS.x+=s*step; dx=e.clientX-tS.x; tS.moved=true;
+    const s=dx>0?1:-1; act(s>0?A.RIGHT:A.LEFT); tS.x+=s*step; dx=e.clientX-tS.x; tS.moved=true;
   }
-  if(e.clientY-tS.sy>CELL*1.2*sd){ G.soft=true; tS.moved=true; }
-  else if(G.soft&&e.clientY-tS.sy<CELL*0.6*sd) G.soft=false;
+  if(e.clientY-tS.sy>CELL*1.2*sd){ if(!G.soft) act(A.SOFT_ON); tS.moved=true; }
+  else if(G.soft&&e.clientY-tS.sy<CELL*0.6*sd) act(A.SOFT_OFF);
 });
 function endTouch(e,cancel){
   if(!tS||e.pointerId!==tS.id) return;
@@ -799,11 +807,11 @@ function endTouch(e,cancel){
   const vy=dy/(dt||1);
   if(!cancel&&state==='PLAY'&&G){
     if(!tS.moved&&dt<350&&Math.abs(dx)<CELL*0.8&&Math.abs(dy)<CELL*0.8){
-      rotate(settings.touch?(e.clientX<W/2?-1:1):1);
-    } else if(vy>0.6/Controls.cfg.swipe&&dy>CELL*1.5/Controls.cfg.swipe) hardDrop();
-    else if(vy<-0.6/Controls.cfg.swipe&&dy<-CELL*1.5/Controls.cfg.swipe) hold();
+      act(settings.touch&&e.clientX<W/2?A.CCW:A.CW);
+    } else if(vy>0.6/Controls.cfg.swipe&&dy>CELL*1.5/Controls.cfg.swipe) act(A.HARD);
+    else if(vy<-0.6/Controls.cfg.swipe&&dy<-CELL*1.5/Controls.cfg.swipe) act(A.HOLD);
   }
-  if(G) G.soft=false;
+  if(G&&G.soft) act(A.SOFT_OFF);
   tS=null;
 }
 addEventListener('pointerup',e=>endTouch(e,false));
