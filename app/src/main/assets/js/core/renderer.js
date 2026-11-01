@@ -2,7 +2,7 @@
 /* Layout e desenho no Canvas (fundo, moldura, peças, HUD, logo da tela inicial). */
 /* ================= LAYOUT / RENDER ================= */
 function resize(){
-  dpr=Math.min(3,window.devicePixelRatio||1); W=innerWidth; H=innerHeight;
+  dpr=Math.min(DPR_MAX,window.devicePixelRatio||1); W=innerWidth; H=innerHeight;
   canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr);
   CELL=Math.max(14,Math.floor(Math.min(W/14.4,H/27.5)));
   const pad=CELL*0.5, bw=COLS*CELL, bh=ROWS*CELL;
@@ -57,38 +57,61 @@ function drawMini(t,bx,by,bw,bh,alpha){
   const ox=bx+(bw-(maxx-minx+1)*s)/2-minx*s, oy=by+(bh-(maxy-miny+1)*s)/2-miny*s;
   cs.forEach(([cx,cy])=>drawBlock(ox+cx*s,oy+cy*s,s,COLORS[t],alpha));
 }
+/* Camadas estáticas em cache (offscreen): só são refeitas quando tema/tamanho mudam. */
+const LC={};
+function layer(name,key,w,h,paint){
+  let l=LC[name];
+  if(!l||l.key!==key){
+    const cv=(l&&l.cv)||document.createElement('canvas');
+    cv.width=Math.max(1,Math.floor(w*dpr)); cv.height=Math.max(1,Math.floor(h*dpr));
+    const c=cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); paint(c);
+    l=LC[name]={cv,key};
+  }
+  return l.cv;
+}
 function drawBackground(){
-  const [c1,c2]=TH();
-  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,c1); g.addColorStop(1,c2);
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-  const rg=ctx.createRadialGradient(W/2,H*.38,0,W/2,H*.38,H*.65);
-  rg.addColorStop(0,'rgba('+TH()[3]+',.28)'); rg.addColorStop(1,'rgba('+TH()[3]+',0)');
-  ctx.fillStyle=rg; ctx.fillRect(0,0,W,H);
+  const T=TH();
+  const bg=layer('bg',[W,H,dpr,T[0],T[1],T[3]].join('|'),W,H,(c)=>{
+    const g=c.createLinearGradient(0,0,0,H); g.addColorStop(0,T[0]); g.addColorStop(1,T[1]);
+    c.fillStyle=g; c.fillRect(0,0,W,H);
+    const rg=c.createRadialGradient(W/2,H*.38,0,W/2,H*.38,H*.65);
+    rg.addColorStop(0,'rgba('+T[3]+',.28)'); rg.addColorStop(1,'rgba('+T[3]+',0)');
+    c.fillStyle=rg; c.fillRect(0,0,W,H);
+  });
+  ctx.drawImage(bg,0,0,W,H);
   BG.fall.forEach(f=>{
     const cs=SHAPES[f.t].rot[f.r%4], s=CELL*f.k, x0=f.x*W, y0=f.y*H;
     cs.forEach(([cx,cy])=>drawBlock(x0+cx*s,y0+cy*s,s,COLORS[f.t],.10));
   });
-  BG.stars.forEach(s=>{ ctx.globalAlpha=s.a*(.6+.4*Math.sin(FX.t*2+s.x*20));
-    ctx.fillStyle='#cfe0ff'; ctx.beginPath(); ctx.arc(s.x*W,s.y*H,s.r,0,6.3); ctx.fill(); });
+  // estrelas: 4 níveis de brilho, um único caminho/preenchimento por nível
+  const lv=[[],[],[],[]];
+  BG.stars.forEach(s=>{ const a=s.a*(.6+.4*Math.sin(FX.t*2+s.x*20)); lv[Math.min(3,(a*5.5)|0)].push(s); });
+  ctx.fillStyle='#cfe0ff';
+  lv.forEach((arr,i)=>{ if(!arr.length) return; ctx.globalAlpha=(i+.5)/5.5; ctx.beginPath(); arr.forEach(s=>{ const x=s.x*W,y=s.y*H; ctx.moveTo(x+s.r,y); ctx.arc(x,y,s.r,0,6.3); }); ctx.fill(); });
   ctx.globalAlpha=1;
 }
+function paintFrame(c,pulse){
+  const {fl,ft,fr,fb,pad}=L, T=TH(), X=Theme.extras(), rrc=(x,y,w,h,r)=>Skins._rr(c,x,y,w,h,r);
+  c.save();
+  c.fillStyle='rgba('+T[4]+',.55)'; rrc(fl,ft,fr-fl,fb-ft,CELL*0.2); c.fill();
+  c.shadowColor='rgb('+T[3]+')'; c.shadowBlur=CELL*(0.5+pulse*1.6);
+  c.strokeStyle=pulse>0?T[2]:'rgb('+T[3]+')'; c.lineWidth=CELL*0.15;
+  rrc(fl+CELL*.07,ft+CELL*.07,fr-fl-CELL*.14,fb-ft-CELL*.14,CELL*0.2); c.stroke();
+  c.restore();
+  c.strokeStyle=T[2]; c.lineWidth=CELL*0.07;
+  rrc(fl+pad*.5,ft+pad*.5,fr-fl-pad,fb-ft-pad,CELL*0.1); c.stroke();
+  const g=c.createLinearGradient(0,L.by,0,L.by+L.bh); g.addColorStop(0,X.board1); g.addColorStop(1,X.board2);
+  c.fillStyle=g; c.fillRect(L.bx,L.by,L.bw,L.bh);
+  c.strokeStyle='rgba('+X.grid+',.30)'; c.lineWidth=1; c.beginPath();
+  for(let i=1;i<COLS;i++){ c.moveTo(L.bx+i*CELL+.5,L.by); c.lineTo(L.bx+i*CELL+.5,L.by+L.bh); }
+  for(let r=1;r<ROWS;r++){ c.moveTo(L.bx,L.by+r*CELL+.5); c.lineTo(L.bx+L.bw,L.by+r*CELL+.5); }
+  c.stroke();
+}
 function drawFrame(){
-  const {fl,ft,fr,fb,pad}=L;
-  ctx.save();
-  const T=TH();
-  ctx.fillStyle='rgba('+T[4]+',.55)'; rr(fl,ft,fr-fl,fb-ft,CELL*0.2); ctx.fill();
-  ctx.shadowColor='rgb('+T[3]+')'; ctx.shadowBlur=CELL*(0.5+FX.pulse*1.6);
-  ctx.strokeStyle=FX.pulse>0?T[2]:'rgb('+T[3]+')'; ctx.lineWidth=CELL*0.15;
-  rr(fl+CELL*.07,ft+CELL*.07,fr-fl-CELL*.14,fb-ft-CELL*.14,CELL*0.2); ctx.stroke();
-  ctx.restore();
-  ctx.strokeStyle=T[2]; ctx.lineWidth=CELL*0.07;
-  rr(fl+pad*.5,ft+pad*.5,fr-fl-pad,fb-ft-pad,CELL*0.1); ctx.stroke();
-  const g=ctx.createLinearGradient(0,L.by,0,L.by+L.bh); const X=Theme.extras(); g.addColorStop(0,X.board1); g.addColorStop(1,X.board2);
-  ctx.fillStyle=g; ctx.fillRect(L.bx,L.by,L.bw,L.bh);
-  ctx.strokeStyle='rgba('+X.grid+',.30)'; ctx.lineWidth=1; ctx.beginPath();
-  for(let c=1;c<COLS;c++){ ctx.moveTo(L.bx+c*CELL+.5,L.by); ctx.lineTo(L.bx+c*CELL+.5,L.by+L.bh); }
-  for(let r=1;r<ROWS;r++){ ctx.moveTo(L.bx,L.by+r*CELL+.5); ctx.lineTo(L.bx+L.bw,L.by+r*CELL+.5); }
-  ctx.stroke();
+  if(FX.pulse>0){ paintFrame(ctx,FX.pulse); return; }     // durante o pulso o brilho varia a cada quadro
+  const T=TH(), X=Theme.extras();
+  const cv=layer('frame',[W,H,dpr,CELL,L.fl,L.ft,L.fr,L.fb,T.join(),X.board1,X.board2,X.grid].join('|'),W,H,(c)=>paintFrame(c,0));
+  ctx.drawImage(cv,0,0,W,H);
 }
 function drawLogo(){
   const C=CELL, T=TH(), x=L.bx+.9*C, y=L.by+3.3*C, w=8.2*C, h=2.8*C, gold='#d9ad4f';

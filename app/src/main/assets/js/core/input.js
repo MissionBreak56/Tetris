@@ -3,8 +3,16 @@
 /* ================= LOOP ================= */
 let last=0;
 let acc=0;
+let frameN=0;
+/** Economia de bateria: com a partida pausada ou uma folha aberta nada se move rápido, então desenha menos quadros. */
+function idleSkip(){
+  if(state==='PAUSED') return (frameN++%4)!==0;
+  if(state==='MENU'&&typeof $==='function'&&$('sheet').classList.contains('on')) return (frameN++%2)!==0;
+  return false;
+}
 function loop(t){
   requestAnimationFrame(loop);
+  if(idleSkip()) return;
   const dt=Math.min(0.1,(t-last)/1000||0); last=t;
   if(state==='REPLAY'){ Replay.frame(dt); updateFx(dt); render(); return; }
   acc+=dt; let n=0;

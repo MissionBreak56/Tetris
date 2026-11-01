@@ -2,6 +2,7 @@
 /* Constantes (grade, formas, temas), configurações do jogador e persistência de preferências. */
 const $=id=>document.getElementById(id);
 /* ================= CONFIG ================= */
+const DPR_MAX=2;   // limita a resolução interna do Canvas (menos pixels preenchidos por quadro; visual praticamente igual)
 const COLS=10, ROWS=20, FPS=60;
 const GRAV=[48,43,38,33,28,23,18,13,8,6];
 // [fundo topo, fundo base, destaque, glow rgb, moldura rgb, botão rgb, grad1, grad2]

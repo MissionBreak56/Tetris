@@ -19,9 +19,27 @@ const Skins = {
   cur() { return typeof settings !== 'undefined' && this.valid(settings.skin) ? settings.skin : 'classic'; },
   _poly(c, pts) { c.beginPath(); c.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(pts[i], pts[i + 1]); c.closePath(); c.fill(); },
   _rr(c, x, y, w, h, r) { c.beginPath(); if (c.roundRect) c.roundRect(x, y, w, h, r); else c.rect(x, y, w, h); },
+  _sprites: new Map(),
+  /** Bloco pré-renderizado (uma única drawImage por bloco no Canvas principal). Margem para o brilho do neon. */
+  sprite(color, s, id) {
+    const key = id + '|' + color + '|' + Math.round(s * 100);
+    let sp = this._sprites.get(key); if (sp) return sp;
+    const d = typeof dpr === 'number' ? dpr : 1, m = Math.ceil(s * 0.3), w = s + 2 * m;
+    const cv = document.createElement('canvas'); cv.width = cv.height = Math.max(1, Math.ceil(w * d));
+    const c = cv.getContext('2d'); c.scale(d, d); this.raw(c, m, m, s, color, 1, id);
+    if (this._sprites.size > 400) this._sprites.clear();
+    sp = { cv, m, w: cv.width / d }; this._sprites.set(key, sp); return sp;
+  },
   draw(c, x, y, s, color, alpha, id) {
-    c.globalAlpha = alpha == null ? 1 : alpha;
     const k = id || this.cur();
+    if (c.canvas && c.canvas.id === 'cv' && s >= 4) {              // canvas principal: usa sprite em cache
+      const sp = this.sprite(color, s, k);
+      c.globalAlpha = alpha == null ? 1 : alpha; c.drawImage(sp.cv, x - sp.m, y - sp.m, sp.w, sp.w); c.globalAlpha = 1; return;
+    }
+    this.raw(c, x, y, s, color, alpha, k);
+  },
+  raw(c, x, y, s, color, alpha, k) {
+    c.globalAlpha = alpha == null ? 1 : alpha;
     if (k === 'flat') {
       const lw = Math.max(1, s * 0.07);
       c.fillStyle = color; c.fillRect(x, y, s, s);
