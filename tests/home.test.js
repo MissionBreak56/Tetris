@@ -40,9 +40,9 @@ test('botões que abrem telas: Diário, Personalizado, Versus, Torneio e Tutoria
     h.sb.handleBack(); assert.equal(h.els.sheet.classList.contains('on'), false, id); assert.equal(h.els.menu.classList.contains('on'), true, 'volta ao menu');
   }
 });
-test('todos os modos têm chave e estão acessíveis também pelo menu "Modos de jogo"', () => {
+test('telas de modo registradas por chave (Zen e Sprint iniciam direto pelos botões)', () => {
   const h = load(1); const keys = plain(h.get('Modes').list).map((m) => m.key).sort();
-  assert.deepEqual(keys, ['custom', 'daily', 'sprint', 'tourney', 'tutorial', 'versus', 'zen']);
+  assert.deepEqual(keys, ['custom', 'daily', 'tourney', 'tutorial', 'versus']);
   assert.equal(h.get('Modes').openFromHome('inexistente'), false);
 });
 test('DAILY mostra ✓ quando o desafio de hoje foi concluído', () => {
@@ -51,3 +51,10 @@ test('DAILY mostra ✓ quando o desafio de hoje foi concluído', () => {
   assert.equal(h.els.bDaily.textContent, 'DAILY ✓'); assert.equal(h.els.bDaily.classList.contains('done'), true);
 });
 test('render da tela inicial não lança com a nova grade', () => { const h = load(1); h.sb.resize(); assert.doesNotThrow(() => h.sb.render()); });
+
+test('menu da engrenagem não tem mais "Modos de jogo"; velocidade do Zen fica em Ajustes e vale ao iniciar pelo botão', () => {
+  const h = load(1);
+  assert.equal(h.get('Hub').items.map((i) => i.label).some((l) => /Modos/.test(l)), false);
+  h.sb.openSettingsSheet(); assert.ok(h.els.sheetBody.children.some((c) => c.children && c.children.some((x) => /Zen/.test(x.textContent || ''))));
+  h.get('Prefs').setZenLevel(9); h.els.bZen.onclick(); assert.equal(h.G().level, 9);
+});

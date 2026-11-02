@@ -102,5 +102,5 @@ test('missões: concluir durante a partida aparece no resultado', () => {
 });
 test('missões e diário: telas abrem sem erro', () => {
   const h = load(1);
-  assert.doesNotThrow(() => { h.sb.openMissions(); h.sb.openModesSheet(); h.get('Modes').list.find((m) => m.label === 'Desafio diário').open(); });
+  assert.doesNotThrow(() => { h.sb.openMissions(); h.get('Modes').list.find((m) => m.label === 'Desafio diário').open(); });
 });

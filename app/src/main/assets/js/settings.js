@@ -18,6 +18,7 @@ function openSettingsSheet() {
     b.appendChild(toggleBtn('Vibrar', () => settings.vib, (v) => { settings.vib = v; saveSettings(); refreshMenu(); }));
     b.appendChild(toggleBtn('Efeitos visuais', () => settings.fx, (v) => { settings.fx = v; saveSettings(); }));
     b.appendChild(toggleBtn('Controle lateral no toque', () => settings.touch, (v) => { settings.touch = v; saveSettings(); }));
+    b.appendChild(slider('Velocidade do modo Zen (nível)', 1, 15, 1, () => Prefs.zenLevel(), (v) => Prefs.setZenLevel(v), (v) => String(Math.round(v))));
     b.appendChild(btn('Áudio', openAudioSheet));
     b.appendChild(btn('Controles', openControlsSheet));
     b.appendChild(h('div', { class: 'hint' }, 'Gestos valem em qualquer lugar da tela:', h('br'), 'toque = gira (lado escolhe o sentido) · arrasta = move', h('br'), 'arrasta ↓ = queda suave · desliza ↓ = derruba · desliza ↑ = hold'));

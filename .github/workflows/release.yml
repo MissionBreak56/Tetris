@@ -44,8 +44,11 @@ jobs:
           if [ -n "$KS_B64" ]; then
             echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
             echo "pass=$KS_PASS" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "::error::Release por tag exige os secrets KEYSTORE_BASE64 e KEYSTORE_PASSWORD (ver docs/SIGNING.md). Nada foi publicado."
+            exit 1
           else
-            echo "Sem secrets: gerando chave temporária (cada build terá assinatura diferente)"
+            echo "Build de teste sem secrets: chave temporária (NÃO publique este APK)"
             P=$(openssl rand -hex 12)
             keytool -genkeypair -keystore "$RUNNER_TEMP/release.jks" -alias tetris -keyalg RSA -keysize 2048 -validity 10000 -storepass "$P" -keypass "$P" -dname "CN=Tetris Proprio"
             echo "::add-mask::$P"
@@ -60,6 +63,8 @@ jobs:
         run: gradle :app:assembleRelease --no-daemon
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk Tetris-${{ github.ref_name }}.apk
+      - name: Mostrar impressão digital da assinatura
+        run: keytool -printcert -jarfile Tetris-${{ github.ref_name }}.apk | grep -E "Owner|SHA256"
       - uses: actions/upload-artifact@v4
         with:
           name: apk
@@ -71,4 +76,4 @@ jobs:
         run: |
           gh release create "${{ github.ref_name }}" Tetris-${{ github.ref_name }}.apk \
             --title "Tetris ${{ github.ref_name }}" \
-            --notes "Tetris de código próprio, sem anúncios. Modos: Maratona, 2 Minutos e Estratégia (9 habilidades). Instale o APK em Android 6.0 ou superior."
+            --notes "Tetris offline e sem anúncios. Todos os modos na tela inicial (Classic, 2 Minutes, Strategy, Zen, Sprint 40, Daily, Custom, Versus, Torneio e Tutorial). APK assinado com a chave de release do projeto (impressão digital em docs/SIGNING.md). Requer Android 6.0 ou superior."

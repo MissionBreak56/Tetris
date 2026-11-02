@@ -126,6 +126,6 @@ test('tutorial: dados salvos corrompidos não quebram', () => {
   assert.doesNotThrow(() => load(1, { tetris_tut: 'xx' }).get('Tut').saved());
   assert.equal(load(1, { tetris_tut: '{"step":99}' }).get('Tut').saved().step, 6);
 });
-test('menu de modos abre sem erro', () => {
-  const h = load(1); assert.doesNotThrow(() => { h.sb.openModesSheet(); });
+test('menu "Modos de jogo" foi removido (modos ficam na tela inicial)', () => {
+  const h = load(1); assert.equal(typeof h.sb.openModesSheet, 'undefined'); assert.equal(h.get('Hub').items.some((i) => /Modos/.test(i.label)), false);
 });
