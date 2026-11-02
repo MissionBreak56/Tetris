@@ -4,7 +4,7 @@ Tetris para Android feito do zero, sem anúncios e sem rede, inspirado nas regra
 
 - Grade 10×20, sorteio 7-bag, hold, peça-fantasma, T-Spin e Back-to-Back
 - Gravidade pela tabela de quadros (níveis 1–30)
-- Tela inicial neon (CLASSIC, 2 MINUTES, STRATEGY, LEVEL, THEME, GHOST, MUSIC, SOUND) que acompanha o tema escolhido
+- Tela inicial neon com TODOS os modos (CLASSIC, 2 MINUTES, STRATEGY, ZEN, SPRINT 40, DAILY, CUSTOM, VERSUS, TORNEIO, TUTORIAL) e os botões LEVEL, THEME, GHOST, MUSIC, SOUND, que acompanha o tema escolhido
 - Modos: **Classic**, **2 Minutes** (Ultra), **Strategy** (bloco-pergunta com 9 habilidades), **Zen** (sem game over), **Sprint 40**, **Desafio diário** (determinístico por data), **Desafios personalizados**, **Versus** (IA em 3 níveis ou 2 jogadores) e **Torneios** eliminatórios
 - Tutorial interativo, estatísticas e análises (PPS/APM), histórico, ranking local, conquistas, missões e recompensas
 - **Perfis locais** com dados isolados, **replays** determinísticos (exportar/importar com verificação), **backup/restauração** transacional

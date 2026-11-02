@@ -97,5 +97,5 @@ function openCustomEditor(id) {
     refresh();
   });
 }
-Modes.add(40, 'Desafio personalizado', openCustomList);
+Modes.add(40, 'Desafio personalizado', openCustomList, 'custom');
 Store.register('custom');

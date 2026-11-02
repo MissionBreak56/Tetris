@@ -149,5 +149,5 @@ function buildTourneySetup(b) {
   }));
   refresh();
 }
-Modes.add(60, 'Torneio', () => openTournament(false));
+Modes.add(60, 'Torneio', () => openTournament(false), 'tourney');
 Store.register('tourney', 'tourneyWins');

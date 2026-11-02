@@ -102,6 +102,8 @@
   .mb.mode{font-size:calc(var(--cell)*.95);font-weight:500;letter-spacing:calc(var(--cell)*.02);animation:mbin .45s both}
   .mb.mode:nth-of-type(3){animation-delay:.08s}.mb.mode:nth-of-type(4){animation-delay:.16s}
   @keyframes mbin{from{opacity:0;transform:translateY(calc(var(--cell)*.6)) scale(.92)}to{opacity:1;transform:none}}
+  .mb.mode2{font-size:calc(var(--cell)*.5);font-weight:600;letter-spacing:calc(var(--cell)*.015);border-width:calc(var(--cell)*.06);border-radius:calc(var(--cell)*.22);animation:mbin .45s .24s both}
+  .mb.mode2.done{color:#8affb0}
   .mb.side{font-size:calc(var(--cell)*.34);font-weight:500;border-radius:calc(var(--cell)*.28)}
   .mb svg{width:calc(var(--cell)*.78);height:calc(var(--cell)*.78);fill:#fff;stroke:none;flex:none}
   .mb.off{color:#9aa8d8}.mb.off svg{opacity:.45}
@@ -129,6 +131,13 @@
   <button class="mb mode" id="bMarathon">CLASSIC</button>
   <button class="mb mode" id="bTimed">2 MINUTES</button>
   <button class="mb mode" id="bStrategy">STRATEGY</button>
+  <button class="mb mode2" id="bZen">ZEN</button>
+  <button class="mb mode2" id="bSprint">SPRINT 40</button>
+  <button class="mb mode2" id="bDaily">DAILY</button>
+  <button class="mb mode2" id="bCustom">CUSTOM</button>
+  <button class="mb mode2" id="bVersus">VERSUS</button>
+  <button class="mb mode2" id="bTourney">TORNEIO</button>
+  <button class="mb mode2" id="bTutorial">TUTORIAL</button>
   <button class="mb side" id="bTheme"><svg viewBox="0 0 24 24"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>THEME</button>
   <button class="mb side" id="tGhost"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="6.4" height="6.4"/><rect x="8.8" y="3" width="6.4" height="6.4"/><rect x="15.6" y="3" width="6.4" height="6.4"/><rect x="9.4" y="14.4" width="5.2" height="5.2" style="fill:none;stroke:#fff;stroke-width:1.6;stroke-dasharray:2.2 1.6"/></svg>GHOST<i class="slash"></i></button>
   <button class="mb side" id="tMusic"><svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>MUSIC<i class="slash"></i></button>

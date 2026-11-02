@@ -48,4 +48,4 @@ Modes.add(90, 'Tutorial', () => {
     b.appendChild(btn(sv.done ? 'Repetir tutorial' : 'Começar', () => startTutorial(0)));
     if (!sv.done && sv.step > 0) b.appendChild(btn('Continuar do passo ' + (sv.step + 1), () => startTutorial(sv.step)));
   });
-});
+}, 'tutorial');

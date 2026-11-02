@@ -4,6 +4,7 @@
 function refreshMenu(){
   const lb=$('lvBadge'); lb.textContent=settings.startLevel; lb.classList.toggle('on',settings.startLevel>1);
   const tv=$('tVib'); if(tv) tv.textContent='Vibrar: '+(settings.vib?'ON':'OFF');
+  { const d=Daily.load()[Daily.dateKey()], done=!!(d&&d.done); $('bDaily').textContent='DAILY'+(done?' ✓':''); $('bDaily').classList.toggle('done',done); }
   $('tGhost').classList.toggle('off',!settings.ghost);
   $('tMusic').classList.toggle('off',!settings.music);
   $('tSound').classList.toggle('off',!settings.sound);
@@ -11,6 +12,13 @@ function refreshMenu(){
 $('bMarathon').onclick=()=>{sfx.click();startGame(1);};
 $('bTimed').onclick=()=>{sfx.click();startGame(2);};
 $('bStrategy').onclick=()=>{sfx.click();startGame(3);};
+$('bZen').onclick=()=>{sfx.click();startGame(4,{zenLevel:Prefs.zenLevel()});};
+$('bSprint').onclick=()=>{sfx.click();startGame(5);};
+$('bDaily').onclick=()=>{sfx.click();Modes.openFromHome('daily');};
+$('bCustom').onclick=()=>{sfx.click();Modes.openFromHome('custom');};
+$('bVersus').onclick=()=>{sfx.click();Modes.openFromHome('versus');};
+$('bTourney').onclick=()=>{sfx.click();Modes.openFromHome('tourney');};
+$('bTutorial').onclick=()=>{sfx.click();Modes.openFromHome('tutorial');};
 $('bLevel').onclick=()=>{sfx.click();Hub.open();};
 $('sheetBack').onclick=()=>{sfx.click();Sheet.back();};
 $('bTheme').onclick=()=>{const ids=Theme.ids(), i=ids.indexOf(settings.theme); settings.theme=ids[(i+1)%ids.length]; saveSettings(); applyTheme(); sfx.click();};

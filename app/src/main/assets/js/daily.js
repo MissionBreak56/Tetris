@@ -42,4 +42,4 @@ Modes.add(30, 'Desafio diário', () => {
     b.appendChild(kv('Concluídos no total', Daily.count()));
     b.appendChild(btn(e && e.done ? 'Jogar novamente' : 'Jogar', () => startGame(6, Daily.options(key))));
   });
-});
+}, 'daily');

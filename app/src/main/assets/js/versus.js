@@ -191,4 +191,4 @@ function openVersus() {
     b.appendChild(btn('Dois jogadores (mesma tela)', () => Versus.start({ players: [{ kind: 'human', name: 'Jogador 1' }, { kind: 'human', name: 'Jogador 2' }] })));
   });
 }
-Modes.add(50, 'Versus (IA / 2 jogadores)', openVersus);
+Modes.add(50, 'Versus (IA / 2 jogadores)', openVersus, 'versus');

@@ -1,6 +1,11 @@
 'use strict';
 /* Lista de modos extras (além dos 3 botões da tela inicial). Cada módulo registra suas entradas com Modes.add. */
-const Modes = { list: [], add(order, label, open) { this.list.push({ order, label, open }); } };
+const Modes = {
+  list: [],
+  add(order, label, open, key) { this.list.push({ order, label, open, key }); },
+  /** Abre a tela de um modo a partir da tela inicial (a folha volta para a tela inicial ao fechar). */
+  openFromHome(key) { const m = this.list.find((x) => x.key === key); if (!m) return false; Sheet.stack = []; hide('menu'); show('sheet'); m.open(); return true; },
+};
 function openModesSheet() {
   Sheet.push('Modos', (b) => {
     Modes.list.slice().sort((a, c) => a.order - c.order).forEach((m) => b.appendChild(btn(typeof m.label === 'function' ? m.label() : m.label, m.open)));
@@ -17,5 +22,5 @@ Modes.add(10, 'Zen — sem game over', () => {
     b.appendChild(slider('Velocidade (nível)', 1, 15, 1, () => Prefs.zenLevel(), (v) => Prefs.setZenLevel(v), (v) => String(Math.round(v))));
     b.appendChild(btn('Jogar Zen', () => startGame(4, { zenLevel: Prefs.zenLevel() })));
   });
-});
-Modes.add(20, () => 'Sprint 40 — melhor: ' + (Records.get(5) ? fmtMsP(Records.get(5)) : '—'), () => startGame(5));
+}, 'zen');
+Modes.add(20, () => 'Sprint 40 — melhor: ' + (Records.get(5) ? fmtMsP(Records.get(5)) : '—'), () => startGame(5), 'sprint');
