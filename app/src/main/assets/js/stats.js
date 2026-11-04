@@ -1,6 +1,6 @@
 'use strict';
 /* StatisticsManager — estatísticas acumuladas por perfil, no total e por modalidade. */
-const MODE_NAMES = { 1: 'Classic', 2: '2 Minutes', 3: 'Strategy', 4: 'Zen', 5: 'Sprint 40', 6: 'Desafio diário', 7: 'Desafio personalizado', 8: 'Versus', 9: 'Tutorial' };
+const MODE_NAMES = { 1: 'Classic', 2: '2 Minutes', 3: 'Strategy', 4: 'Zen', 5: 'Sprint 40', 6: 'Desafio diário', 7: 'Desafio personalizado', 8: 'Versus', 9: 'Tutorial', 10: 'Online (rede local)' };
 const StatsMgr = {
   blank() { return { games: 0, wins: 0, lines: 0, bestScore: 0, bestLevel: 0, bestCombo: 0, tetrises: 0, tspins: 0, perfect: 0, pieces: 0, playMs: 0 }; },
   load() {

@@ -1,7 +1,9 @@
 package com.missionbreak56.tetris;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.net.wifi.WifiManager;
 import android.net.Uri;
 import android.webkit.JavascriptInterface;
 import org.json.JSONObject;
@@ -20,6 +22,30 @@ public class MainActivity extends Activity {
     private static final int REQ_SAVE = 101, REQ_OPEN = 102, MAX_READ = 8000000;
     private WebView web;
     private String pendingSave;
+    private LanNet lan;
+    private WifiManager.MulticastLock mlock;
+
+    private void lock(boolean on) {
+        try {
+            if (on) {
+                if (mlock == null) {
+                    WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                    if (wm != null) { mlock = wm.createMulticastLock("tetris-lan"); mlock.setReferenceCounted(false); }
+                }
+                if (mlock != null && !mlock.isHeld()) mlock.acquire();
+            } else if (mlock != null && mlock.isHeld()) mlock.release();
+        } catch (Exception ignored) { }
+    }
+
+    private LanNet lan() {
+        if (lan == null) {
+            lan = new LanNet(new LanNet.Listener() {
+                public void event(final String json) { js("Net._ev(" + json + ")"); }
+                public void line(final String line) { js("Net._line(" + LanNet.q(line) + ")"); }
+            });
+        }
+        return lan;
+    }
 
     /** Ponte JS -> Android (somente conteúdo local do app é carregado na WebView). */
     private class Bridge {
@@ -44,6 +70,14 @@ public class MainActivity extends Activity {
                 startActivityForResult(i, REQ_SAVE);
             } });
         }
+        // ---- Rede local (modo online) ----
+        @JavascriptInterface public void lanHost(String name, int port) { lock(true); lan().host(name, port); }
+        @JavascriptInterface public void lanScan() { lock(true); lan().scan(4000); }
+        @JavascriptInterface public void lanJoin(String ip, int port) { lock(false); lan().join(ip, port); }
+        @JavascriptInterface public void lanSend(String line) { lan().send(line); }
+        @JavascriptInterface public void lanClose() { lan().close(); lock(false); }
+        @JavascriptInterface public String lanIp() { return LanNet.localIp(); }
+
         @JavascriptInterface
         public void pickFile() {
             runOnUiThread(new Runnable() { public void run() {
@@ -55,7 +89,10 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void js(String code) { web.evaluateJavascript(code, null); }
+    private void js(final String code) {
+        runOnUiThread(new Runnable() { public void run() { if (web != null) web.evaluateJavascript(code, null); } });
+    }
+
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
@@ -120,7 +157,12 @@ public class MainActivity extends Activity {
     @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) hideBars(); }
     @Override protected void onPause() { super.onPause(); web.onPause(); }
     @Override protected void onResume() { super.onResume(); web.onResume(); }
-    @Override protected void onDestroy() { web.destroy(); super.onDestroy(); }
+    @Override protected void onDestroy() {
+        if (lan != null) lan.close();
+        lock(false);
+        web.destroy();
+        super.onDestroy();
+    }
 
     @Override
     public void onBackPressed() {

@@ -21,6 +21,15 @@ jobs:
           node-version: '22'
       - name: Rodar testes (lógica do jogo, sem dependências externas)
         run: node --test tests/*.test.js
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Testar a rede local (classe Java LanNet, loopback)
+        run: |
+          mkdir -p /tmp/lan
+          javac -d /tmp/lan app/src/main/java/com/missionbreak56/tetris/LanNet.java tests/java/LanNetTest.java
+          java -ea -cp /tmp/lan LanNetTest
 
   build:
     needs: test

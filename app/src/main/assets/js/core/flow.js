@@ -29,6 +29,10 @@ function gameOver(reason){
 }
 let pauseFrom='PLAY';
 function pauseGame(){
+  if(Versus.active&&Versus.net){                       // online: não existe pausa (o oponente continua); só desistir
+    if(state==='VERSUS'&&!document.hidden) Confirm.ask('Abandonar a partida? Você perde e o oponente vence.',()=>Net.forfeitLocal());
+    return;
+  }
   if(state!=='PLAY'&&state!=='VERSUS') return;
   pauseFrom=state; if(Versus.active) Versus.B.forEach(g=>{ g.soft=false; });
   if(G&&G.soft) act(A.SOFT_OFF);

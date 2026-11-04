@@ -28,7 +28,7 @@ function layoutMenu(){
   const y0=by+9.2*C+3*(mh+g1)+.1*C, h2=1.05*C, g2=.17*C, cw=(mw-g2)/2;   // grade 2 colunas com os demais modos
   const grid=[['bZen','bSprint'],['bDaily','bCustom'],['bVersus','bTourney']];
   grid.forEach((row,r)=>row.forEach((id,c)=>place(id,mx+c*(cw+g2),y0+r*(h2+g2),cw,h2)));
-  place('bTutorial',mx,y0+3*(h2+g2),mw,h2);
+  place('bTutorial',mx,y0+3*(h2+g2),cw,h2); place('bOnline',mx+cw+g2,y0+3*(h2+g2),cw,h2);
   const sz=Math.min(1.7*C,W-L.fr-8), sx=L.fr+Math.max(4,(W-L.fr-sz)/2), gp=.25*C;
   const ySound=L.fb-sz-.35*C, yMusic=ySound-sz-gp, yGhost=yMusic-sz-gp;
   place('tSound',sx,ySound,sz,sz); place('tMusic',sx,yMusic,sz,sz); place('tGhost',sx,yGhost,sz,sz);

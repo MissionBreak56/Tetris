@@ -4,10 +4,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { load, plain } = require('./harness');
 
-const MODE_BTNS = ['bMarathon', 'bTimed', 'bStrategy', 'bZen', 'bSprint', 'bDaily', 'bCustom', 'bVersus', 'bTourney', 'bTutorial'];
+const MODE_BTNS = ['bMarathon', 'bTimed', 'bStrategy', 'bZen', 'bSprint', 'bDaily', 'bCustom', 'bVersus', 'bTourney', 'bTutorial', 'bOnline'];
 const rect = (h, id) => { const s = h.els[id].style; return { x: parseFloat(s.left), y: parseFloat(s.top), w: parseFloat(s.width), h: parseFloat(s.height) }; };
 
-test('layout: 10 botões de modo dentro da moldura, sem sobreposição, em várias telas', () => {
+test('layout: 11 botões de modo dentro da moldura, sem sobreposição, em várias telas', () => {
   for (const [w, hh] of [[360, 640], [411, 890], [412, 915], [320, 568], [768, 1024]]) {
     const h = load(1); h.sb.innerWidth = w; h.sb.innerHeight = hh; h.sb.resize();
     const L = plain(h.get('L')), R = MODE_BTNS.map((id) => [id, rect(h, id)]);
@@ -33,7 +33,7 @@ test('botões de início direto: Zen (com a velocidade salva) e Sprint', () => {
   h.sb.goMenu(); h.els.bSprint.onclick(); assert.equal(h.G().mode, 5);
 });
 test('botões que abrem telas: Diário, Personalizado, Versus, Torneio e Tutorial; fechar volta à tela inicial', () => {
-  for (const [id, title] of [['bDaily', 'Desafio diário'], ['bCustom', 'Desafios personalizados'], ['bVersus', 'Versus'], ['bTourney', 'Torneio'], ['bTutorial', 'Tutorial']]) {
+  for (const [id, title] of [['bDaily', 'Desafio diário'], ['bCustom', 'Desafios personalizados'], ['bVersus', 'Versus'], ['bTourney', 'Torneio'], ['bTutorial', 'Tutorial'], ['bOnline', 'Online (rede local)']]) {
     const h = load(1); h.els[id].onclick();
     assert.equal(h.els.sheet.classList.contains('on'), true, id); assert.equal(h.els.sheetTitle.textContent, title);
     assert.equal(h.get('Sheet').stack.length, 1);
@@ -42,7 +42,7 @@ test('botões que abrem telas: Diário, Personalizado, Versus, Torneio e Tutoria
 });
 test('telas de modo registradas por chave (Zen e Sprint iniciam direto pelos botões)', () => {
   const h = load(1); const keys = plain(h.get('Modes').list).map((m) => m.key).sort();
-  assert.deepEqual(keys, ['custom', 'daily', 'tourney', 'tutorial', 'versus']);
+  assert.deepEqual(keys, ['custom', 'daily', 'online', 'tourney', 'tutorial', 'versus']);
   assert.equal(h.get('Modes').openFromHome('inexistente'), false);
 });
 test('DAILY mostra ✓ quando o desafio de hoje foi concluído', () => {

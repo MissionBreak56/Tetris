@@ -4,7 +4,7 @@
 const COMBO_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
 const GARBAGE_COLOR = '#6b7390';
 const Versus = {
-  active: false, cfg: null, B: [], pend: [0, 0], sent: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,
+  active: false, net: null, cfg: null, B: [], pend: [0, 0], sent: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,
   layouts() {
     const hw = W / 2, C = Math.max(10, Math.floor(Math.min((hw - 10) / (COLS + 1), (H * 0.78) / (ROWS + 3)))), pad = C * 0.4;
     this.cellV = C;
@@ -13,7 +13,7 @@ const Versus = {
   },
   withBoard(i, fn) {
     const pg = G, pl = Object.assign({}, L), pc = CELL, ps = SIM;
-    G = this.B[i]; Object.assign(L, this.lay[i]); CELL = this.cellV; if (G.ai) SIM = true;
+    G = this.B[i]; Object.assign(L, this.lay[i]); CELL = this.cellV; if (G.ai || (this.net && i !== this.net.local)) SIM = true;
     try { return fn(); } finally { G = pg; Object.assign(L, pl); CELL = pc; SIM = ps; }
   },
   humans() { return this.cfg.players.filter((p) => p.kind === 'human').length; },
@@ -22,10 +22,12 @@ const Versus = {
     const seed = cfg.seed != null ? cfg.seed >>> 0 : (Math.random() * 4294967296) >>> 0;
     this.cfg = cfg; this.pend = [0, 0]; this.sent = [0, 0]; this.ticks = 0; this.acc = 0; this.over = false; this.result = null; this.touch = [null, null];
     this.rng = mkRng(seed ^ 0x9e3779b9); this.layouts(); this.B = [];
+    this.net = cfg.net ? { local: cfg.net.local, D: cfg.net.D || 8, q: [{}, {}], remoteUpto: -1, out: [], hashes: {}, remoteHashes: {} } : null;
     const keep = G;
     for (let i = 0; i < 2; i++) {
       newGame(8, { seed, rules: { levelUps: true } });
       const g = G; g.versus = true; g.vi = i; g.rec = null; g.name = cfg.players[i].name; g.note = null; g.opts = { cfg };
+      if (this.net) g.level = 1;                                  // igual nos dois aparelhos (não depende do nível inicial salvo)
       if (cfg.players[i].kind === 'ai') AI.attach(g, cfg.players[i].level || 'medium', seed + i);
       this.B.push(g);
     }
@@ -41,7 +43,8 @@ const Versus = {
     const step = () => { if (n > 0) { cd.textContent = n; restartAnim(cd, 'cpop'); sfx.tick(); n--; setTimeout(step, 650); } else { cd.style.display = 'none'; state = 'VERSUS'; startMusic(); } };
     step();
   },
-  stop() { this.active = false; this.touch = [null, null]; },
+  stop() { this.active = false; this.touch = [null, null]; if (this.net) { this.net = null; Net.disconnect(); } },
+  me() { return this.net ? this.net.local : 0; },
   attack(info, combo) {
     if (info.perfect) return 10;
     let a = info.tspin ? (info.n === 0 ? 0 : [0, 2, 4, 6][info.n]) : [0, 0, 1, 2, 4][info.n];
@@ -65,13 +68,23 @@ const Versus = {
     if (info.n === 0 && this.pend[i] > 0 && !G.overDone) { const rows = Math.min(8, this.pend[i]); this.pend[i] -= rows; this.addGarbage(G, rows); }
   },
   tick() {
-    if (this.over) return; this.ticks++;
+    if (this.over) return;
+    if (this.net) this.netApply(this.ticks);
+    this.ticks++;
     const order = this.ticks % 2 ? [1, 0] : [0, 1];          // alterna quem age primeiro (sem vantagem sistemática em ataques simultâneos)
     for (const i of order) { const g = this.B[i]; if (g.ai && !g.overDone) this.withBoard(i, () => AI.step(g)); }
     for (const i of order) { const g = this.B[i]; if (!g.overDone) this.withBoard(i, () => update(STEP)); if (g.note && (g.note.ttl -= STEP) <= 0) g.note = null; }
+    if (this.net && !this.over && this.ticks % Net.HASH_EVERY === 0) this.netHash();
     if (this.B[0].overDone || this.B[1].overDone || this.ticks >= this.MAX_TICKS) this.finish();
   },
-  frame(dt) { this.acc += dt; let n = 0; while (this.acc >= STEP && n < 6 && !this.over && state === 'VERSUS') { this.acc -= STEP; this.tick(); n++; } if (n === 6) this.acc = 0; },
+  frame(dt) {
+    this.acc += dt; let n = 0;
+    if (this.net) {                                                   // lockstep: só avança se o oponente já prometeu suas ações até este tick
+      Net.pump();
+      while (this.acc >= STEP && n < 6 && !this.over && state === 'VERSUS' && this.net && this.net.remoteUpto >= this.ticks) { this.acc -= STEP; this.tick(); n++; }
+      if (this.acc > STEP * 6) this.acc = STEP * 6;
+      Net.pump(); return;
+    } while (this.acc >= STEP && n < 6 && !this.over && state === 'VERSUS') { this.acc -= STEP; this.tick(); n++; } if (n === 6) this.acc = 0; },
   /** Vencedor: quem sobreviveu; em empate (mesmo tick/tempo esgotado) vale quem enviou mais lixo, depois pontuação. */
   decide() {
     const a = this.B[0], b = this.B[1];
@@ -85,23 +98,25 @@ const Versus = {
     const d = this.decide(), B = this.B;
     this.result = { winner: d.winner, tie: d.tie, ticks: this.ticks, sent: this.sent.slice(), score: B.map((g) => Math.round(g.score)), lines: B.map((g) => g.lines), names: this.cfg.players.map((p) => p.name), kinds: this.cfg.players.map((p) => p.kind), level: this.cfg.players.map((p) => p.level || null) };
     if (this.cfg.headless) return;
+    if (this.net) Net.matchEnded();
     state = 'VSOVER'; stopMusic(); sfx.gameover(); $('pauseBtn').style.display = 'none';
     const finishUi = () => { if (state !== 'VSOVER') return; if (this.cfg.onEnd) this.cfg.onEnd(this.result); else this.showEnd(); };
     setTimeout(finishUi, 1200);
   },
   showEnd() {
-    const r = this.result, one = this.humans() === 1, win = r.winner === 0;
-    const g = this.B[0]; g.won = win; G = g;
+    const r = this.result, net = !!this.net || !!(this.cfg && this.cfg.net), one = this.humans() === 1 || net, me = net ? this.cfg.net.local : 0, win = r.winner === me;
+    const g = this.B[me]; g.won = win; G = g;
     let rec = { tracked: false, isBest: false, prev: 0, best: 0 };
-    const res = Results.compile(g, 'versus'); res.mode = 8;
+    const res = Results.compile(g, 'versus'); res.mode = net ? 10 : 8;
     if (one) { rec = Results.commit(res); }
-    const title = one ? (win ? 'VOCÊ VENCEU!' : 'VOCÊ PERDEU') : r.names[r.winner] + ' VENCEU!';
+    const title = r.aborted ? 'PARTIDA INTERROMPIDA' : one ? (win ? 'VOCÊ VENCEU!' : 'VOCÊ PERDEU') : r.names[r.winner] + ' VENCEU!';
     $('endTitle').textContent = title;
     const box = $('endStats'); clearEl(box);
     box.appendChild(kv('Placar', fmtNum(r.score[0]) + ' × ' + fmtNum(r.score[1])));
     box.appendChild(kv('Linhas', r.lines[0] + ' × ' + r.lines[1])); box.appendChild(kv('Lixo enviado', r.sent[0] + ' × ' + r.sent[1]));
     box.appendChild(kv('Duração', fmtMsP(r.ticks * 1000 / 60)));
-    if (r.tie) box.appendChild(h('div', { class: 'hint', text: 'Desempate por lixo enviado/pontuação.' }));
+    if (r.tie && !r.reason) box.appendChild(h('div', { class: 'hint', text: 'Desempate por lixo enviado/pontuação.' }));
+    if (r.reason) box.appendChild(h('div', { class: 'errs', text: r.reason }));
     (res.unlocked || []).forEach((a) => box.appendChild(h('div', { class: 'newrec', text: '🏆 Conquista: ' + a.name })));
     show('endPanel'); void rec;
   },
@@ -119,8 +134,13 @@ const Versus = {
     }
   },
   /* ---------- entrada ---------- */
-  input(p, code) { const g = this.B[p]; if (!g || g.overDone || g.ai) return false; return this.withBoard(p, () => act(code, true)); },
-  playerAt(x) { return this.humans() >= 2 ? (x < W / 2 ? 0 : 1) : 0; },
+  input(p, code) {
+    if (this.net) {                                                   // ação local: vale D ticks no futuro e é enviada ao oponente
+      const g = this.B[p]; if (p !== this.net.local || !g || g.overDone || this.over || state !== 'VERSUS') return false;
+      const t = this.ticks + this.net.D; (this.net.q[p][t] = this.net.q[p][t] || []).push(code); this.net.out.push([t, code]); return true;
+    }
+    const g = this.B[p]; if (!g || g.overDone || g.ai) return false; return this.withBoard(p, () => act(code, true)); },
+  playerAt(x) { if (this.net) return this.net.local; return this.humans() >= 2 ? (x < W / 2 ? 0 : 1) : 0; },
   /* ---------- desenho ---------- */
   mini(t, cx, cy, s) {
     if (!t) return; const cs = SHAPES[t].rot[0]; let x0 = 9, x1 = -9, y0 = 9, y1 = -9;
@@ -145,18 +165,63 @@ const Versus = {
   },
   render() { this.layouts(); for (let i = 0; i < 2; i++) this.withBoard(i, () => { drawFrame('vs' + i); drawBoard(); this.hud(i); }); },
 };
+/* ---- lockstep: aplicar ações agendadas, receber mensagens, hash de sincronia, desistência ---- */
+Versus.netApply = function (t) {
+  for (let i = 0; i < 2; i++) {
+    const ev = this.net.q[i][t]; if (!ev) continue; delete this.net.q[i][t];
+    ev.forEach((c) => { const g = this.B[i]; if (!g.overDone) this.withBoard(i, () => act(c, true)); });
+  }
+};
+Versus.netRecv = function (m) {
+  const n = this.net, r = 1 - n.local;
+  if (!Number.isInteger(m.u) || m.u < -1 || m.u > this.ticks + 600 || !Array.isArray(m.e) || m.e.length > 64) return this.netAbort('Mensagem inválida do oponente');
+  for (const x of m.e) {
+    if (!Array.isArray(x) || x.length !== 2 || !Number.isInteger(x[0]) || !Number.isInteger(x[1]) || x[1] < 0 || x[1] > 7) return this.netAbort('Ação inválida do oponente');
+    if (x[0] < this.ticks || x[0] > this.ticks + 600) return this.netAbort('Ação fora de sincronia');
+    (n.q[r][x[0]] = n.q[r][x[0]] || []).push(x[1]);
+  }
+  if (m.u > n.remoteUpto) n.remoteUpto = m.u;
+};
+Versus.netState = function () {
+  return fnv(JSON.stringify([this.B.map((g) => [g.grid, Math.round(g.score), g.lines, g.level, g.tick, g.active && g.active.t, g.active && g.active.x, g.active && g.active.y, g.held, g.queue.slice(0, 3)]), this.pend, this.sent]));
+};
+Versus.netHash = function () {
+  const n = this.net, t = this.ticks, h = this.netState(); n.hashes[t] = h; Net.send({ k: 'h', t, h });
+  if (n.remoteHashes[t] !== undefined) this.netCompare(t);
+};
+Versus.netRecvHash = function (m) {
+  const n = this.net; if (!Number.isInteger(m.t) || typeof m.h !== 'string' || m.h.length > 16) return;
+  n.remoteHashes[m.t] = m.h; if (n.hashes[m.t] !== undefined) this.netCompare(m.t);
+};
+Versus.netCompare = function (t) {
+  const n = this.net, a = n.hashes[t], b = n.remoteHashes[t]; delete n.hashes[t]; delete n.remoteHashes[t];
+  if (a !== b) this.netAbort('Os jogos dessincronizaram (tick ' + t + ')');
+};
+/** Encerra sem vencedor (dessincronia, mensagem inválida). */
+Versus.netAbort = function (why) {
+  if (this.over) return; this.over = true; const B = this.B;
+  this.result = { winner: -1, tie: false, aborted: true, reason: why, ticks: this.ticks, sent: this.sent.slice(), score: B.map((g) => Math.round(g.score)), lines: B.map((g) => g.lines), names: this.cfg.players.map((p) => p.name), kinds: ['human', 'human'] };
+  Net.send({ k: 'bye' }); try { Net.tr().close(); } catch (e) {}
+  state = 'VSOVER'; stopMusic(); $('pauseBtn').style.display = 'none'; Net.st = 'ended'; Net.peer = null; Net.stopTimer();
+  setTimeout(() => { if (state === 'VSOVER') this.showEnd(); }, 600);
+};
+/** Um dos lados saiu/caiu: o outro vence. */
+Versus.netForfeit = function (loser, why) {
+  if (this.over) return; this.B[loser].overDone = true; this.finish();
+  if (this.result) this.result.reason = why;
+};
 Versus.attachNote = function (t) { if (G && G.versus) { G.note = { t, ttl: 1.2 }; return true; } return false; };
 
 /* ---- teclado e toque (só em VERSUS; o jogo solo usa os manipuladores de input.js) ---- */
 addEventListener('keydown', (e) => {
   if (!Versus.active || state !== 'VERSUS') return;
-  const k = e.key, I = (c) => Versus.input(0, c);
+  const k = e.key, I = (c) => Versus.input(Versus.me(), c);
   if (k === 'ArrowLeft') I(A.LEFT); else if (k === 'ArrowRight') I(A.RIGHT); else if (k === 'ArrowDown') I(A.SOFT_ON);
   else if (k === 'ArrowUp' || k === 'x' || k === 'X') I(A.CW); else if (k === 'z' || k === 'Z') I(A.CCW);
   else if (k === ' ') { e.preventDefault(); I(A.HARD); } else if (k === 'c' || k === 'C' || k === 'Shift') I(A.HOLD);
   else if (k === 'p' || k === 'P' || k === 'Escape') pauseGame();
 });
-addEventListener('keyup', (e) => { if (Versus.active && e.key === 'ArrowDown') Versus.input(0, A.SOFT_OFF); });
+addEventListener('keyup', (e) => { if (Versus.active && e.key === 'ArrowDown') Versus.input(Versus.me(), A.SOFT_OFF); });
 addEventListener('pointerdown', (e) => {
   if (!Versus.active || state !== 'VERSUS' || onUi(e)) return;
   const p = Versus.playerAt(e.clientX); if (Versus.touch[p] || Versus.B[p].ai) return;

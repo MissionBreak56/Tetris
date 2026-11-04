@@ -25,6 +25,8 @@
 | 29 | Torneios | `js/tournament.js` |
 | 30 | Backup/restauração transacional | `js/backup.js` |
 
+| extra | Modo online em rede local (lockstep determinístico) | `js/net.js`, `LanNet.java`, `docs/ONLINE.md` |
+
 ## Decisões e correções registradas
 - **S em rotação 2 virava Z** (defeito original): corrigido; `ENGINE_VERSION` = `E2`. Teste de geometria cobre todas as peças.
 - `lastRot` não é limpo ao mover/cair (possível T-Spin falso após girar e mover): **mantido** (caracterização em teste), pendente de decisão.

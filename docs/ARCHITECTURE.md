@@ -22,6 +22,7 @@ Todo o jogo é JavaScript puro, **sem dependências**, dividido em scripts clás
 | Dados de jogo | `js/stats.js`, `js/history.js`, `js/achv.js`, `js/missions.js`, `js/daily.js`, `js/ranking.js`, `js/analysis.js` | Estatísticas, histórico/recordes/resultados, conquistas, missões, desafio diário, ranking, análises |
 | Replays | `js/replay.js` | `Replays` (gravar/verificar/simular/importar/exportar), `Replay` (reprodução) |
 | Modos | `js/modes.js`, `js/tutorial.js` + extras | Registro de modos (`Modes.add`), tutorial |
+| Online (LAN) | `js/net.js`, `Versus` (modo `net`), `LanNet.java` | `Net` (lobby, protocolo, lockstep), `Lan` (ponte), `LanNet` (sockets TCP + descoberta UDP). Ver `docs/ONLINE.md` |
 | Android | `js/native.js` + `MainActivity.java` | `Native` (compartilhar, salvar/abrir arquivo). Fora do Android usa alternativas de navegador |
 | Aplicação | `js/core/app.js`, `js/core/config.js` | Ligação dos botões da tela inicial, inicialização, constantes e configurações |
 
