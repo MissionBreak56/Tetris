@@ -9,7 +9,21 @@ Dois aparelhos Android no **mesmo Wi-Fi (ou hotspot)** jogam Versus um contra o 
 4. No fim, **Retry** pede revanche (o anfitrião inicia). **Home** encerra a conexão.
 
 Requisitos: mesma versão do app nos dois aparelhos (o aperto de mão compara protocolo e `ENGINE_VERSION`), Wi-Fi sem isolamento de clientes
-("AP isolation" desligado). Só IPs de rede local são aceitos (10.x, 172.16–31.x, 192.168.x, 169.254.x).
+("AP isolation" desligado). Faixas aceitas: redes privadas (10.x, 172.16–31.x, 192.168.x, 169.254.x) e de VPN (Tailscale 100.64–127.x, Hamachi 25.x).
+
+## Jogar à distância com VPN
+Qualquer VPN que coloque os dois celulares na mesma rede virtual serve (Tailscale, ZeroTier, WireGuard, Hamachi...):
+1. Os dois entram na mesma rede da VPN.
+2. O anfitrião toca em **Criar sala**: a tela lista **todos os IPs do aparelho** com o nome da interface (ex.: `wlan0`, `tun0`, `tailscale0`); ele passa o IP da interface da VPN.
+3. O outro usa **Conectar por IP** (a busca automática não atravessa VPN, pois o broadcast UDP não é repassado).
+
+A porta TCP 47600 precisa estar liberada na VPN (por padrão está).
+
+## Ping e atraso de entrada automático
+No lobby (e durante a partida) os aparelhos trocam `p`/`pong` com carimbo de tempo e medem o RTT (mediana mostrada na tela, últimas 12 medidas).
+Ao iniciar, o anfitrião calcula o atraso de entrada `D = ceil(RTT_p90 / 2 / 16,67 ms) + 3` (mínimo 6, máximo 24 ticks) e envia no `start`.
+RTT de 100 ms ⇒ D = 6 (≈100 ms de atraso de entrada); 400 ms ⇒ D = 15 (≈250 ms). Sem medições, D = 8.
+O ping aparece no topo durante a partida. Latências acima de ~500 ms ficam difíceis de jogar, mas nunca dessincronizam.
 
 ## Arquitetura
 - **Camada de rede** (`LanNet.java`, Java puro, testado na JVM): anfitrião = `ServerSocket` TCP 47600 + anúncio por broadcast UDP (47601)

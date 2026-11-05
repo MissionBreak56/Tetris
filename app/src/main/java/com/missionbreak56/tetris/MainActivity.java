@@ -77,6 +77,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface public void lanSend(String line) { lan().send(line); }
         @JavascriptInterface public void lanClose() { lan().close(); lock(false); }
         @JavascriptInterface public String lanIp() { return LanNet.localIp(); }
+        @JavascriptInterface public String lanIps() { return LanNet.localIpsJson(); }
 
         @JavascriptInterface
         public void pickFile() {

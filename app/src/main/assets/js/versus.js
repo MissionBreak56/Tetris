@@ -163,7 +163,10 @@ const Versus = {
       txt(g.overDone ? 'K.O.' : (winner ? 'WIN' : ''), cx, L.by + L.bh / 2, C * 1.8, g.overDone ? '#ff6a6a' : '#7dffa0', 'center', '800');
     }
   },
-  render() { this.layouts(); for (let i = 0; i < 2; i++) this.withBoard(i, () => { drawFrame('vs' + i); drawBoard(); this.hud(i); }); },
+  render() {
+    this.layouts(); for (let i = 0; i < 2; i++) this.withBoard(i, () => { drawFrame('vs' + i); drawBoard(); this.hud(i); });
+    if (this.net && Net.ping() != null) txt(Math.round(Net.ping()) + ' ms', W / 2, 14, 12, 'rgba(255,255,255,.6)', 'center', '500');
+  },
 };
 /* ---- lockstep: aplicar ações agendadas, receber mensagens, hash de sincronia, desistência ---- */
 Versus.netApply = function (t) {

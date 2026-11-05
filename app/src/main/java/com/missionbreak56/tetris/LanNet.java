@@ -93,6 +93,24 @@ public final class LanNet {
         return fallback;
     }
 
+    /** Todos os IPv4 ativos do aparelho como JSON: [{"n":"wlan0","ip":"192.168.0.5"}, ...] (inclui VPN: tun0, tailscale0...). */
+    public static String localIpsJson() {
+        StringBuilder b = new StringBuilder("[");
+        int n = 0;
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!ni.isUp() || ni.isLoopback()) continue;
+                for (InetAddress a : Collections.list(ni.getInetAddresses())) {
+                    if (a instanceof Inet4Address && !a.isLoopbackAddress() && n < 8) {
+                        if (n++ > 0) b.append(',');
+                        b.append("{\"n\":").append(q(ni.getName())).append(",\"ip\":").append(q(a.getHostAddress())).append('}');
+                    }
+                }
+            }
+        } catch (Exception ignored) { }
+        return b.append(']').toString();
+    }
+
     private List<InetAddress> targets() {
         List<InetAddress> t = broadcastTargets;
         if (t != null) return t;
@@ -122,7 +140,7 @@ public final class LanNet {
                     ss.bind(new InetSocketAddress(port));
                     synchronized (lock) { if (g != gen) { ss.close(); return; } server = ss; }
                     final int p = ss.getLocalPort();
-                    emit("{\"e\":\"hosting\",\"ip\":" + q(localIp()) + ",\"port\":" + p + "}");
+                    emit("{\"e\":\"hosting\",\"ip\":" + q(localIp()) + ",\"ips\":" + localIpsJson() + ",\"port\":" + p + "}");
                     startAnnouncer(g, name, p);
                     Socket s = ss.accept();
                     synchronized (lock) {

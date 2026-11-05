@@ -15,6 +15,8 @@ function pair({ lat = 0, jitter = 0, seed = 1, names = ['Ana', 'Beto'] } = {}) {
   const mk = (dir, log) => ({ closed: false, hosted: null, joined: null, available: () => true, host(n, p) { this.closed = false; this.hosted = [n, p]; }, scan() {}, join(ip, p) { this.closed = false; this.joined = [ip, p]; }, close() { this.closed = true; },
     send(line) { log.push(line); if (this.closed) return; const due = step + lat + (jitter ? rnd() % (jitter + 1) : 0), arr = q[dir], last = arr.length ? arr[arr.length - 1][0] : 0; arr.push([Math.max(due, last), line]); } });
   T.a = mk('ab', sent.a); T.b = mk('ba', sent.b);
+  const clock = () => step * 1000 / 60;                                    // relógio da simulação (1 quadro = 16,67 ms)
+  A.sb.__now = clock; B.sb.__now = clock; A.run('Net.now = __now'); B.run('Net.now = __now');
   A.sb.__T = T.a; B.sb.__T = T.b; A.run('Net.T = __T'); B.run('Net.T = __T');
   A.run(`Profile.state.list[0].name = ${JSON.stringify(names[0])}`); B.run(`Profile.state.list[0].name = ${JSON.stringify(names[1])}`);
   NetOf(A).host(); NetOf(A)._ev({ e: 'hosting', ip: '192.168.0.5' });
@@ -26,6 +28,7 @@ function pair({ lat = 0, jitter = 0, seed = 1, names = ['Ana', 'Beto'] } = {}) {
     tick(n = 1, inputs) {
       for (let i = 0; i < n; i++) {
         step++; P.deliver();
+        if (step % 30 === 0) for (const h of [A, B]) NetOf(h).heartbeat();     // timer de 0,5 s
         if (inputs) inputs(P);
         for (const h of [A, B]) if (h.state() === 'VERSUS') V(h).frame(1 / 60);
       }
@@ -199,4 +202,59 @@ test('botão ONLINE da tela inicial abre a tela; rede nativa (Lan) usa AndroidBr
   const calls = []; h.sb.AndroidBridge = { lanHost: (n, p) => calls.push(['host', n, p]), lanScan: () => calls.push(['scan']), lanJoin: (i, p) => calls.push(['join', i, p]), lanSend: (l) => calls.push(['send', l]), lanClose: () => calls.push(['close']), lanIp: () => '192.168.0.9' };
   assert.equal(h.get('Lan').available(), true); NetOf(h).host(); NetOf(h).scan(); NetOf(h).join('192.168.0.9'); NetOf(h).disconnect();
   assert.deepEqual(calls.map((c) => c[0]), ['close', 'host', 'close', 'scan', 'join', 'close']); assert.deepEqual(calls[1], ['host', 'Jogador 1', 47600]);
+});
+
+/* ---------------- VPN: faixas, IPs do aparelho, ping e atraso de entrada automático ---------------- */
+test('VPN: aceita Tailscale (100.64–127.x) e Hamachi (25.x); recusa o resto', () => {
+  const N = NetOf(load(1)); const r = (ip) => N.validIp(ip);
+  assert.deepEqual(['100.64.0.1', '100.100.5.5', '100.127.255.254', '25.1.2.3', '25.255.255.255'].map(r), [true, true, true, true, true]);
+  assert.deepEqual(['100.63.255.255', '100.128.0.1', '26.1.2.3', '24.1.2.3', '100.64.0', '100.64.0.256'].map(r), [false, false, false, false, false, false]);
+});
+test('sala: lista todos os IPs do aparelho (inclui interface da VPN), validados e limitados', () => {
+  const h = load(1); h.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; h.run('Net.T=__T'); NetOf(h).host();
+  const ips = [{ n: 'wlan0', ip: '192.168.0.5' }, { n: 'tailscale0', ip: '100.101.102.103' }, { n: 'x', ip: 'abc' }, null, { n: 5, ip: 7 }, ...Array.from({ length: 12 }, (_, i) => ({ n: 'e' + i, ip: '10.0.0.' + i }))];
+  NetOf(h)._ev({ e: 'hosting', ip: '192.168.0.5', ips });
+  const got = plain(NetOf(h).ips); assert.equal(got.length, 8); assert.deepEqual(got.slice(0, 2), [{ n: 'wlan0', ip: '192.168.0.5' }, { n: 'tailscale0', ip: '100.101.102.103' }]);
+  assert.doesNotThrow(() => h.sb.openOnline()); const texto = JSON.stringify(plain(h.els.sheetBody.children)).length; assert.ok(texto > 0);
+  const calls = []; h.sb.AndroidBridge = { lanIps: () => '[{"n":"tun0","ip":"10.8.0.2"}]', lanIp: () => '10.8.0.2' }; assert.deepEqual(plain(h.get('Lan').ips()), [{ n: 'tun0', ip: '10.8.0.2' }]);
+  h.sb.AndroidBridge = { lanIps: () => 'lixo' }; assert.deepEqual(plain(h.get('Lan').ips()), []); void calls;
+});
+test('ping: responde "p" com pong, mede RTT pelo relógio e ignora pong inválido', () => {
+  const P = pair({ lat: 6 }); P.tick(150);
+  const rtt = NetOf(P.A).ping(); assert.ok(rtt !== null && Math.abs(rtt - 12 * 1000 / 60) <= 20, 'RTT ≈ 200 ms, veio ' + rtt);
+  const n = NetOf(P.A).rtts.length;
+  for (const bad of [-5000, 99999999, 'x', null, NaN]) NetOf(P.A)._line(JSON.stringify({ k: 'pong', t: bad }));
+  NetOf(P.A)._line(JSON.stringify({ k: 'pong', t: P.step() * 1000 / 60 + 10000 })); assert.equal(NetOf(P.A).rtts.length, n);
+  const before = P.sent.a.length; NetOf(P.A)._line(JSON.stringify({ k: 'p' })); assert.equal(P.sent.a.length, before, 'sem t não responde');
+  NetOf(P.A)._line(JSON.stringify({ k: 'p', t: 123 })); assert.equal(JSON.parse(P.sent.a[P.sent.a.length - 1]).k, 'pong');
+  assert.ok(NetOf(P.A).rtts.length <= 12);
+});
+test('atraso de entrada automático: tabela por RTT (mín. 6, máx. 24, padrão 8 sem medidas)', () => {
+  const N = NetOf(load(1)); const d = (a) => { N.rtts = a; return N.autoD(); };
+  assert.equal(d([]), 8); assert.equal(d([50, 50]), 8);
+  assert.equal(d([5, 5, 5, 5]), 6); assert.equal(d([100, 100, 100, 100, 100]), 6); assert.equal(d([300, 300, 300, 300, 300]), 12);
+  assert.equal(d([400, 400, 400, 400, 400, 400, 400, 400, 400, 400]), 15); assert.equal(d([5000, 5000, 5000, 5000]), 24);
+  assert.equal(d([20, 20, 20, 20, 20, 20, 20, 20, 20, 900]), 6, 'um pico isolado (<10%) não infla o atraso'); assert.equal(d([20, 20, 20, 20, 20, 900, 900, 900, 900, 900]), 24);
+});
+test('partida usa o atraso calibrado e os dois aparelhos concordam', () => {
+  const P = pair({ lat: 12 }); P.tick(200);                                    // 12 quadros de ida = RTT ≈ 400 ms
+  assert.equal(NetOf(P.A).autoD(), 15); startMatch(P);
+  assert.equal(V(P.A).net.D, 15); assert.equal(V(P.B).net.D, 15);
+});
+test('com RTT alto o atraso calibrado evita travadas; com atraso fixo pequeno o jogo trava', () => {
+  const run = (calibrate) => {
+    const P = pair({ lat: 12 }); P.tick(200); if (!calibrate) NetOf(P.A).autoD = () => 8;
+    startMatch(P); const t0 = V(P.A).ticks; P.tick(600); return (V(P.A).ticks - t0) / 600;
+  };
+  const cal = run(true), fixo = run(false);
+  assert.ok(cal > 0.9, 'calibrado roda ~60 ticks/s: ' + cal); assert.ok(fixo < 0.8 && fixo < cal - 0.2, 'D=8 com RTT 400 ms trava: ' + fixo + ' vs ' + cal);
+});
+test('mesmo com RTT alto e jitter os tabuleiros continuam idênticos usando o atraso automático', () => {
+  const P = pair({ lat: 9, jitter: 5, seed: 12 }); P.tick(250); startMatch(P); const inp = randomInputs(41);
+  for (let i = 0; i < 15000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+  assert.ok(V(P.A).over && V(P.B).over); assert.equal(boards(P.A), boards(P.B)); assert.equal(V(P.A).result.aborted, undefined);
+});
+test('tela: lobby mostra ping e atraso; partida desenha o ping sem erro', () => {
+  const P = pair({ lat: 3 }); P.tick(120); assert.doesNotThrow(() => P.A.sb.openOnline());
+  startMatch(P); P.tick(30); for (const s of ['COUNT', 'VERSUS', 'VSOVER']) { P.A.setState(s); assert.doesNotThrow(() => P.A.sb.render(), s); }
 });

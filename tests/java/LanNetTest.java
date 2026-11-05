@@ -67,6 +67,10 @@ public class LanNetTest {
         String found = s6.waitEvent("found", 4000);
         check(found.contains("\"ip\":\"127.0.0.1\"") && found.contains("\"port\":" + p6) && found.contains("Sala do Zé"), "anúncio descoberto: " + found);
         s6.waitEvent("scanDone", 6000); check(true, "scan termina");
+        // 6b) lista de IPs do aparelho (inclui VPN) e evento hosting com ips
+        String ips = LanNet.localIpsJson();
+        check(ips.startsWith("[") && ips.endsWith("]") && (ips.equals("[]") || ips.matches("^\\[(\\{\"n\":\"[^\"]+\",\"ip\":\"\\d+\\.\\d+\\.\\d+\\.\\d+\"\\},?)+\\]$")), "localIpsJson válido: " + ips);
+        Peer h10 = new Peer(udp); h10.net.host("Ips", 0); String hev = h10.waitEvent("hosting", 3000); check(hev.contains("\"ips\":["), "evento hosting traz ips: " + hev); h10.net.close();
         // 7) escape JSON
         check(LanNet.q("a\"b\\c\n\u2028").equals("\"a\\\"b\\\\c\\n\\u2028\""), "escape JSON");
         // 8) host em porta ocupada informa erro
