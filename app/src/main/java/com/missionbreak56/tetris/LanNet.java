@@ -242,8 +242,9 @@ public final class LanNet {
     /* ------------------------------------------------------------------ conexão */
     private void attach(Socket s, int g) {
         try {
-            s.setTcpNoDelay(true);
+            s.setTcpNoDelay(true);                       // sem agrupar pacotes pequenos (Nagle desligado)
             s.setKeepAlive(true);
+            try { s.setTrafficClass(0x10); } catch (Exception ignored) { }   // IPTOS_LOWDELAY
             OutputStream os = s.getOutputStream();
             synchronized (lock) {
                 if (g != gen) { s.close(); return; }

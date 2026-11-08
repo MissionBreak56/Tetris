@@ -4,6 +4,7 @@
 const COMBO_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
 const GARBAGE_COLOR = '#6b7390';
 const Versus = {
+  PRED_MAX: 30, SNAP_WIN: 40,
   active: false, net: null, cfg: null, B: [], pend: [0, 0], sent: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,
   layouts() {
     const hw = W / 2, C = Math.max(10, Math.floor(Math.min((hw - 10) / (COLS + 1), (H * 0.78) / (ROWS + 3)))), pad = C * 0.4;
@@ -22,7 +23,7 @@ const Versus = {
     const seed = cfg.seed != null ? cfg.seed >>> 0 : (Math.random() * 4294967296) >>> 0;
     this.cfg = cfg; this.pend = [0, 0]; this.sent = [0, 0]; this.ticks = 0; this.acc = 0; this.over = false; this.result = null; this.touch = [null, null];
     this.rng = mkRng(seed ^ 0x9e3779b9); this.layouts(); this.B = [];
-    this.net = cfg.net ? { local: cfg.net.local, D: cfg.net.D || 8, q: [{}, {}], remoteUpto: -1, out: [], hashes: {}, remoteHashes: {} } : null;
+    this.net = cfg.net ? { local: cfg.net.local, q: [{}, {}], remoteUpto: -1, out: [], snaps: {}, rb: null, endTick: null, nextH: Net.HASH_EVERY, hashes: {}, remoteHashes: {} } : null;
     const keep = G;
     for (let i = 0; i < 2; i++) {
       newGame(8, { seed, rules: { levelUps: true } });
@@ -67,23 +68,27 @@ const Versus = {
     }
     if (info.n === 0 && this.pend[i] > 0 && !G.overDone) { const rows = Math.min(8, this.pend[i]); this.pend[i] -= rows; this.addGarbage(G, rows); }
   },
-  tick() {
-    if (this.over) return;
-    if (this.net) this.netApply(this.ticks);
-    this.ticks++;
+  /** Atualiza os dois tabuleiros por 1 tick (ticks já incrementado). Compartilhado entre jogo local e online. */
+  stepBoards() {
     const order = this.ticks % 2 ? [1, 0] : [0, 1];          // alterna quem age primeiro (sem vantagem sistemática em ataques simultâneos)
     for (const i of order) { const g = this.B[i]; if (g.ai && !g.overDone) this.withBoard(i, () => AI.step(g)); }
     for (const i of order) { const g = this.B[i]; if (!g.overDone) this.withBoard(i, () => update(STEP)); if (g.note && (g.note.ttl -= STEP) <= 0) g.note = null; }
-    if (this.net && !this.over && this.ticks % Net.HASH_EVERY === 0) this.netHash();
+  },
+  tick() {
+    if (this.over) return;
+    if (this.net) { this.netTick(); return; }
+    this.ticks++;
+    this.stepBoards();
     if (this.B[0].overDone || this.B[1].overDone || this.ticks >= this.MAX_TICKS) this.finish();
   },
   frame(dt) {
     this.acc += dt; let n = 0;
-    if (this.net) {                                                   // lockstep: só avança se o oponente já prometeu suas ações até este tick
-      Net.pump();
-      while (this.acc >= STEP && n < 6 && !this.over && state === 'VERSUS' && this.net && this.net.remoteUpto >= this.ticks) { this.acc -= STEP; this.tick(); n++; }
+    if (this.net) {                                                   // previsão + correção: avança sem esperar o oponente (até PRED_MAX ticks)
+      Net.pump(); this.netRollback();
+      while (this.acc >= STEP && n < 6 && !this.over && state === 'VERSUS' && this.net && this.ticks - (this.net.remoteUpto + 1) < this.PRED_MAX) { this.acc -= STEP; this.netTick(); n++; }
       if (this.acc > STEP * 6) this.acc = STEP * 6;
-      Net.pump(); return;
+      if (this.net) { this.netCheck(); Net.pump(); }
+      return;
     } while (this.acc >= STEP && n < 6 && !this.over && state === 'VERSUS') { this.acc -= STEP; this.tick(); n++; } if (n === 6) this.acc = 0; },
   /** Vencedor: quem sobreviveu; em empate (mesmo tick/tempo esgotado) vale quem enviou mais lixo, depois pontuação. */
   decide() {
@@ -98,7 +103,7 @@ const Versus = {
     const d = this.decide(), B = this.B;
     this.result = { winner: d.winner, tie: d.tie, ticks: this.ticks, sent: this.sent.slice(), score: B.map((g) => Math.round(g.score)), lines: B.map((g) => g.lines), names: this.cfg.players.map((p) => p.name), kinds: this.cfg.players.map((p) => p.kind), level: this.cfg.players.map((p) => p.level || null) };
     if (this.cfg.headless) return;
-    if (this.net) Net.matchEnded();
+    if (this.net) { Net.pump(true); Net.matchEnded(); }      // última confirmação: o oponente precisa do nosso "u" para também encerrar
     state = 'VSOVER'; stopMusic(); sfx.gameover(); $('pauseBtn').style.display = 'none';
     const finishUi = () => { if (state !== 'VSOVER') return; if (this.cfg.onEnd) this.cfg.onEnd(this.result); else this.showEnd(); };
     setTimeout(finishUi, 1200);
@@ -135,9 +140,9 @@ const Versus = {
   },
   /* ---------- entrada ---------- */
   input(p, code) {
-    if (this.net) {                                                   // ação local: vale D ticks no futuro e é enviada ao oponente
+    if (this.net) {                                                   // ação local: vale já no próximo tick (sem atraso) e é enviada na hora
       const g = this.B[p]; if (p !== this.net.local || !g || g.overDone || this.over || state !== 'VERSUS') return false;
-      const t = this.ticks + this.net.D; (this.net.q[p][t] = this.net.q[p][t] || []).push(code); this.net.out.push([t, code]); return true;
+      const t = this.ticks; (this.net.q[p][t] = this.net.q[p][t] || []).push(code); this.net.out.push([t, code]); Net.pump(true); return true;
     }
     const g = this.B[p]; if (!g || g.overDone || g.ai) return false; return this.withBoard(p, () => act(code, true)); },
   playerAt(x) { if (this.net) return this.net.local; return this.humans() >= 2 ? (x < W / 2 ? 0 : 1) : 0; },
@@ -168,29 +173,83 @@ const Versus = {
     if (this.net && Net.ping() != null) txt(Math.round(Net.ping()) + ' ms', W / 2, 14, 12, 'rgba(255,255,255,.6)', 'center', '500');
   },
 };
-/* ---- lockstep: aplicar ações agendadas, receber mensagens, hash de sincronia, desistência ---- */
+/* ---- online: previsão com correção (rollback) ----
+   Cada aparelho simula os DOIS tabuleiros e aplica suas próprias ações na hora. Ações do oponente que chegam atrasadas (tick já simulado)
+   fazem o jogo voltar ao snapshot daquele tick e re-simular até o presente. Fim de partida só vale quando confirmado (todas as ações anteriores conhecidas). */
+function cloneBoard(g) {
+  const o = {};
+  for (const k in g) {
+    if (k === 'rng' || k === 'note' || k === 'opts' || k === 'rules' || k === 'ai') continue;
+    const v = g[k];
+    o[k] = Array.isArray(v) ? (k === 'grid' ? v.map((r) => r.slice()) : v.slice()) : (v && typeof v === 'object' ? Object.assign({}, v) : v);
+  }
+  o.__rng = g.rng.get(); return o;
+}
+function restoreBoard(g, s) {
+  for (const k in s) {
+    if (k === '__rng') { g.rng.set(s.__rng); continue; }
+    const v = s[k]; g[k] = Array.isArray(v) ? (k === 'grid' ? v.map((r) => r.slice()) : v.slice()) : (v && typeof v === 'object' ? Object.assign({}, v) : v);
+  }
+  for (const k of Object.keys(g)) if (!(k in s) && !['rng', 'note', 'opts', 'rules', 'ai'].includes(k)) delete g[k];
+}
+Versus.snap = function () { return { B: this.B.map(cloneBoard), pend: this.pend.slice(), sent: this.sent.slice(), vr: this.rng.get() }; };
+Versus.unsnap = function (s, tick) {
+  s.B.forEach((b, i) => restoreBoard(this.B[i], b)); this.pend = s.pend.slice(); this.sent = s.sent.slice(); this.rng.set(s.vr); this.ticks = tick;
+};
 Versus.netApply = function (t) {
   for (let i = 0; i < 2; i++) {
-    const ev = this.net.q[i][t]; if (!ev) continue; delete this.net.q[i][t];
+    const ev = this.net.q[i][t]; if (!ev) continue;
     ev.forEach((c) => { const g = this.B[i]; if (!g.overDone) this.withBoard(i, () => act(c, true)); });
+  }
+};
+/** 1 tick online: guarda snapshot (estado antes do tick), aplica ações do tick, simula. */
+Versus.netTick = function () {
+  const n = this.net; n.snaps[this.ticks] = this.snap();
+  this.netApply(this.ticks); this.ticks++; this.stepBoards();
+  if (n.endTick == null && (this.B[0].overDone || this.B[1].overDone || this.ticks >= this.MAX_TICKS)) n.endTick = this.ticks;
+  const low = Math.min(this.ticks - this.SNAP_WIN, n.nextH);
+  for (const k of Object.keys(n.snaps)) if (+k < low) delete n.snaps[k];
+  for (let i = 0; i < 2; i++) for (const k of Object.keys(n.q[i])) if (+k < low) delete n.q[i][k];
+};
+/** Volta ao tick mais antigo afetado por ações remotas recebidas e re-simula (em silêncio) até o presente. */
+Versus.netRollback = function () {
+  const n = this.net; if (!n || n.rb == null) return;
+  const rt = n.rb; n.rb = null; if (rt >= this.ticks) return;
+  const snap = n.snaps[rt]; if (!snap) return this.netAbort('Fora de sincronia (janela de correção excedida)');
+  const target = this.ticks, fx = { parts: FX.parts, flash: FX.flash, lock: FX.lock, trail: FX.trail, shake: FX.shake, pulse: FX.pulse }, sim = SIM;
+  if (n.endTick != null && n.endTick > rt) n.endTick = null;
+  this.unsnap(snap, rt); SIM = true; FX.parts = []; FX.flash = []; FX.lock = []; FX.trail = null;
+  try { while (this.ticks < target) this.netTick(); }
+  finally { SIM = sim; FX.parts = fx.parts; FX.flash = fx.flash; FX.lock = fx.lock; FX.trail = fx.trail; FX.shake = fx.shake; FX.pulse = fx.pulse; }
+};
+/** Checagens sobre o estado CONFIRMADO: hash de sincronia periódico e fim de partida. */
+Versus.netCheck = function () {
+  const n = this.net; if (!n || this.over) return;
+  while (n.nextH <= this.ticks && n.remoteUpto >= n.nextH - 1 && n.snaps[n.nextH]) {
+    const t = n.nextH, h = this.snapHash(n.snaps[t]); n.hashes[t] = h; Net.send({ k: 'h', t, h });
+    if (n.remoteHashes[t] !== undefined) this.netCompare(t);
+    n.nextH += Net.HASH_EVERY; if (this.over) return;
+  }
+  if (n.endTick != null && n.remoteUpto >= n.endTick - 1) {
+    if (this.ticks !== n.endTick) { const s = n.snaps[n.endTick]; if (!s) return this.netAbort('Fora de sincronia'); this.unsnap(s, n.endTick); }
+    this.finish();
   }
 };
 Versus.netRecv = function (m) {
   const n = this.net, r = 1 - n.local;
-  if (!Number.isInteger(m.u) || m.u < -1 || m.u > this.ticks + 600 || !Array.isArray(m.e) || m.e.length > 64) return this.netAbort('Mensagem inválida do oponente');
+  if (!Number.isInteger(m.u) || m.u < -1 || m.u > this.ticks + 600 || m.u < n.remoteUpto || !Array.isArray(m.e) || m.e.length > 64) return this.netAbort('Mensagem inválida do oponente');
+  let minT = Infinity;
   for (const x of m.e) {
     if (!Array.isArray(x) || x.length !== 2 || !Number.isInteger(x[0]) || !Number.isInteger(x[1]) || x[1] < 0 || x[1] > 7) return this.netAbort('Ação inválida do oponente');
-    if (x[0] < this.ticks || x[0] > this.ticks + 600) return this.netAbort('Ação fora de sincronia');
-    (n.q[r][x[0]] = n.q[r][x[0]] || []).push(x[1]);
+    if (x[0] <= m.u || x[0] <= n.remoteUpto) return this.netAbort('Ação fora de ordem');
+    if (x[0] < this.ticks - this.SNAP_WIN + 2 || x[0] > this.ticks + 600) return this.netAbort('Ação fora de sincronia');
+    (n.q[r][x[0]] = n.q[r][x[0]] || []).push(x[1]); if (x[0] < minT) minT = x[0];
   }
-  if (m.u > n.remoteUpto) n.remoteUpto = m.u;
+  if (minT < this.ticks) n.rb = n.rb == null ? minT : Math.min(n.rb, minT);       // ação do passado: corrigir no início do próximo quadro
+  n.remoteUpto = m.u;
 };
-Versus.netState = function () {
-  return fnv(JSON.stringify([this.B.map((g) => [g.grid, Math.round(g.score), g.lines, g.level, g.tick, g.active && g.active.t, g.active && g.active.x, g.active && g.active.y, g.held, g.queue.slice(0, 3)]), this.pend, this.sent]));
-};
-Versus.netHash = function () {
-  const n = this.net, t = this.ticks, h = this.netState(); n.hashes[t] = h; Net.send({ k: 'h', t, h });
-  if (n.remoteHashes[t] !== undefined) this.netCompare(t);
+Versus.snapHash = function (s) {
+  return fnv(JSON.stringify([s.B.map((b) => [b.grid, Math.round(b.score), b.lines, b.level, b.tick, b.active && b.active.t, b.active && b.active.x, b.active && b.active.y, b.held, b.queue.slice(0, 3)]), s.pend, s.sent]));
 };
 Versus.netRecvHash = function (m) {
   const n = this.net; if (!Number.isInteger(m.t) || typeof m.h !== 'string' || m.h.length > 16) return;

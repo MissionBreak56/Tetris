@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.net.Uri;
 import android.webkit.JavascriptInterface;
 import org.json.JSONObject;
@@ -24,6 +25,7 @@ public class MainActivity extends Activity {
     private String pendingSave;
     private LanNet lan;
     private WifiManager.MulticastLock mlock;
+    private WifiManager.WifiLock wlock;
 
     private void lock(boolean on) {
         try {
@@ -34,6 +36,23 @@ public class MainActivity extends Activity {
                 }
                 if (mlock != null && !mlock.isHeld()) mlock.acquire();
             } else if (mlock != null && mlock.isHeld()) mlock.release();
+        } catch (Exception ignored) { }
+    }
+
+    /** Mantém o rádio Wi-Fi em modo de baixa latência (sem economia de energia) enquanto houver sala/partida online. */
+    private void wifiLowLatency(boolean on) {
+        try {
+            if (on) {
+                if (wlock == null) {
+                    WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                    if (wm != null) {
+                        int mode = Build.VERSION.SDK_INT >= 29 ? 4 /* WIFI_MODE_FULL_LOW_LATENCY */ : 3 /* WIFI_MODE_FULL_HIGH_PERF */;
+                        wlock = wm.createWifiLock(mode, "tetris-online");
+                        wlock.setReferenceCounted(false);
+                    }
+                }
+                if (wlock != null && !wlock.isHeld()) wlock.acquire();
+            } else if (wlock != null && wlock.isHeld()) wlock.release();
         } catch (Exception ignored) { }
     }
 
@@ -71,11 +90,11 @@ public class MainActivity extends Activity {
             } });
         }
         // ---- Rede local (modo online) ----
-        @JavascriptInterface public void lanHost(String name, int port) { lock(true); lan().host(name, port); }
+        @JavascriptInterface public void lanHost(String name, int port) { lock(true); wifiLowLatency(true); lan().host(name, port); }
         @JavascriptInterface public void lanScan() { lock(true); lan().scan(4000); }
-        @JavascriptInterface public void lanJoin(String ip, int port) { lock(false); lan().join(ip, port); }
+        @JavascriptInterface public void lanJoin(String ip, int port) { lock(false); wifiLowLatency(true); lan().join(ip, port); }
         @JavascriptInterface public void lanSend(String line) { lan().send(line); }
-        @JavascriptInterface public void lanClose() { lan().close(); lock(false); }
+        @JavascriptInterface public void lanClose() { lan().close(); lock(false); wifiLowLatency(false); }
         @JavascriptInterface public String lanIp() { return LanNet.localIp(); }
         @JavascriptInterface public String lanIps() { return LanNet.localIpsJson(); }
 
@@ -161,6 +180,7 @@ public class MainActivity extends Activity {
     @Override protected void onDestroy() {
         if (lan != null) lan.close();
         lock(false);
+        wifiLowLatency(false);
         web.destroy();
         super.onDestroy();
     }

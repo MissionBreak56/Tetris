@@ -1,7 +1,8 @@
 'use strict';
 /* Modo online em REDE LOCAL (Wi-Fi/hotspot). Duas pessoas, dois aparelhos.
-   Sincronização "lockstep": os dois aparelhos simulam os DOIS tabuleiros com a mesma semente e trocam somente as ações
-   (cada ação vale D ticks no futuro). O motor é determinístico, então os tabuleiros ficam idênticos; um hash a cada 2 s detecta qualquer divergência.
+   Previsão com correção (rollback): os dois aparelhos simulam os DOIS tabuleiros com a mesma semente e trocam somente as ações.
+   Suas ações valem na hora (sem atraso de entrada); se uma ação do oponente chegar atrasada o jogo volta àquele tick e re-simula.
+   O motor é determinístico, então os tabuleiros ficam idênticos; um hash do estado confirmado a cada 2 s detecta qualquer divergência.
    Mensagens: JSON em linhas. Versão do protocolo e do motor precisam ser iguais. */
 const Lan = {
   available() { return typeof AndroidBridge !== 'undefined' && typeof AndroidBridge.lanHost === 'function'; },
@@ -16,8 +17,8 @@ const Lan = {
 // Faixas aceitas: redes privadas (RFC1918 + link-local) e de VPN (Tailscale/CGNAT 100.64–127.x e Hamachi 25.x).
 const PRIVATE_NET = /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}|25\.\d{1,3}\.\d{1,3}\.\d{1,3})$/;
 const Net = {
-  PROTO: 1, PORT: 47600, D: 8, MAX_LINE: 16384, HS_MS: 5000, DEAD_MS: 7000, HASH_EVERY: 120,
-  T: null, role: null, st: 'idle', peer: null, hosts: [], ip: '', ips: [], rtts: [], hbN: 0, err: '', lastRx: 0, hsAt: 0, lastSend: 0, lastSentTick: -9, timer: null, onChange: null, name: '', info: '',
+  PROTO: 2, PORT: 47600, MAX_LINE: 16384, HS_MS: 5000, DEAD_MS: 7000, HASH_EVERY: 120,
+  T: null, role: null, sentU: -1, st: 'idle', peer: null, hosts: [], ip: '', ips: [], rtts: [], hbN: 0, err: '', lastRx: 0, hsAt: 0, lastSend: 0, lastSentTick: -9, timer: null, onChange: null, name: '', info: '',
   now() { return Date.now(); },
   tr() { return this.T || Lan; },
   available() { return this.tr().available(); },
@@ -79,8 +80,8 @@ const Net = {
     if (!this.peer) return;                                    // nada além de hello é aceito antes do aperto de mão
     if (m.k === 'start') {
       if (this.role !== 'client' || !['lobby', 'ended'].includes(this.st)) return;
-      if (!Number.isInteger(m.seed) || m.seed < 0 || m.seed > 4294967295 || !Number.isInteger(m.D) || m.D < 2 || m.D > 30) return;
-      this.beginMatch(m.seed, m.D);
+      if (!Number.isInteger(m.seed) || m.seed < 0 || m.seed > 4294967295) return;
+      this.beginMatch(m.seed);
     } else if (m.k === 'again') { if (this.role === 'host' && this.st === 'ended') this.startMatch(); }
     else if (m.k === 'in') { if (this.st === 'playing' && Versus.net) Versus.netRecv(m); }
     else if (m.k === 'h') { if (this.st === 'playing' && Versus.net) Versus.netRecvHash(m); }
@@ -107,12 +108,6 @@ const Net = {
   },
   /** Ping (mediana das últimas medições, ms) ou null. */
   ping() { if (!this.rtts.length) return null; const s = this.rtts.slice().sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; },
-  /** Atraso de entrada (ticks) calibrado pelo pior caso recente (p90): ida ≈ RTT/2 mais margem; mínimo 6, máximo 24. */
-  autoD() {
-    if (this.rtts.length < 3) return this.D;
-    const s = this.rtts.slice().sort((a, b) => a - b), p90 = s[Math.floor((s.length - 1) * 0.9)];
-    return Math.max(6, Math.min(24, Math.ceil(p90 / 2 / (1000 / 60)) + 3));
-  },
   onClosed(why) {
     this.stopTimer();
     if (Versus.active && Versus.net && !Versus.over) { try { this.tr().close(); } catch (e) {} const loser = 1 - Versus.net.local; Versus.netForfeit(loser, why); this.st = 'ended'; this.peer = null; return; }
@@ -123,13 +118,13 @@ const Net = {
   /* ---- partida ---- */
   startMatch() {                                                // só o anfitrião
     if (this.role !== 'host' || !this.peer || !['lobby', 'ended'].includes(this.st)) return false;
-    const seed = (Math.random() * 4294967296) >>> 0, D = this.autoD();
-    this.send({ k: 'start', seed, D }); this.beginMatch(seed, D); return true;
+    const seed = (Math.random() * 4294967296) >>> 0;
+    this.send({ k: 'start', seed }); this.beginMatch(seed); return true;
   },
-  beginMatch(seed, D) {
+  beginMatch(seed) {
     const host = this.role === 'host', me = { kind: 'human', name: this.name || Profile.cur().name }, op = { kind: 'human', name: this.peer.name };
-    this.st = 'playing'; this.lastSentTick = -9; Sheet.stack = [];
-    Versus.start({ seed, players: host ? [me, op] : [op, me], net: { local: host ? 0 : 1, D } });
+    this.st = 'playing'; this.lastSentTick = -9; this.sentU = -1; Sheet.stack = [];
+    Versus.start({ seed, players: host ? [me, op] : [op, me], net: { local: host ? 0 : 1 } });
   },
   rematch() {
     if (!this.connected()) { goMenu(); return; }
@@ -137,11 +132,12 @@ const Net = {
   },
   matchEnded() { if (this.st === 'playing') this.st = 'ended'; },
   /** Enviado a cada quadro durante a partida: ações novas + promessa "não haverá ação minha antes do tick u". */
-  pump() {
+  pump(force) {
     const v = Versus.net; if (!v || this.st !== 'playing') return;
     const t = Versus.ticks;
-    if (v.out.length || t - this.lastSentTick >= 2 || this.now() - this.lastSend > 250) {
-      this.send({ k: 'in', u: t + v.D - 1, e: v.out }); v.out = []; this.lastSentTick = t;
+    if (force || v.out.length || t - this.lastSentTick >= 3 || this.now() - this.lastSend > 250) {
+      this.sentU = Math.max(this.sentU, t - 1);                                          // promessa monotônica (nunca recua, mesmo depois de voltar ao tick do fim)
+      this.send({ k: 'in', u: this.sentU, e: v.out }); v.out = []; this.lastSentTick = t;   // u: "não haverá ação minha antes do tick u+1"
     }
   },
   forfeitLocal() {
@@ -178,7 +174,7 @@ function openOnline() {
       b.appendChild(h('div', { class: 'stat', text: 'Conectando…' })); b.appendChild(btn('Cancelar', () => Net.disconnect()));
     } else if (st === 'lobby') {
       b.appendChild(h('div', { class: 'newrec', text: '✔ Conectado com ' + Net.peer.name }));
-      { const p = Net.ping(); b.appendChild(kv('Ping', p == null ? 'medindo…' : Math.round(p) + ' ms')); if (p != null) b.appendChild(kv('Atraso de entrada', Math.round(Net.autoD() * 1000 / 60) + ' ms')); }
+      { const p = Net.ping(); b.appendChild(kv('Ping', p == null ? 'medindo…' : Math.round(p) + ' ms')); b.appendChild(kv('Atraso dos seus comandos', '≈ 0 ms (previsão com correção)')); }
       if (Net.role === 'host') b.appendChild(btn('▶ Iniciar partida', () => Net.startMatch())); else b.appendChild(h('div', { class: 'stat', text: 'Aguardando o anfitrião iniciar…' }));
       b.appendChild(btn('Desconectar', () => Net.disconnect()));
     }

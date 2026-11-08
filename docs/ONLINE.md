@@ -19,29 +19,34 @@ Qualquer VPN que coloque os dois celulares na mesma rede virtual serve (Tailscal
 
 A porta TCP 47600 precisa estar liberada na VPN (por padrão está).
 
-## Ping e atraso de entrada automático
-No lobby (e durante a partida) os aparelhos trocam `p`/`pong` com carimbo de tempo e medem o RTT (mediana mostrada na tela, últimas 12 medidas).
-Ao iniciar, o anfitrião calcula o atraso de entrada `D = ceil(RTT_p90 / 2 / 16,67 ms) + 3` (mínimo 6, máximo 24 ticks) e envia no `start`.
-RTT de 100 ms ⇒ D = 6 (≈100 ms de atraso de entrada); 400 ms ⇒ D = 15 (≈250 ms). Sem medições, D = 8.
-O ping aparece no topo durante a partida. Latências acima de ~500 ms ficam difíceis de jogar, mas nunca dessincronizam.
+## Ping
+No lobby e durante a partida os aparelhos trocam `p`/`pong` com carimbo de tempo e medem o RTT (mediana das últimas 12 medidas), mostrado no lobby e no topo da partida.
+Não há mais "atraso de entrada" fixo: o ping só afeta o quão rápido você *vê* as jogadas do oponente (≈ RTT/2) e quantas correções ocorrem.
+Acima de ~500 ms de ida o jogo espera o oponente (janela de previsão) — mesmo assim nunca dessincroniza.
 
 ## Arquitetura
 - **Camada de rede** (`LanNet.java`, Java puro, testado na JVM): anfitrião = `ServerSocket` TCP 47600 + anúncio por broadcast UDP (47601)
   até alguém conectar; cliente = `scan` (escuta anúncios) ou `join` por IP. Uma única conexão; mensagens em **linhas UTF-8**
   (limite 16 KB; excedeu = conexão fechada). `MainActivity` expõe `lanHost/lanScan/lanJoin/lanSend/lanClose/lanIp` ao JavaScript
   e mantém um `MulticastLock` durante a busca.
-- **Protocolo** (`js/net.js`, JSON por linha): `hello{p,eng,name}` / `nack` / `start{seed,D}` / `again` / `in{u,e}` / `h{t,h}` / `p` / `bye`.
-  Nada além de `hello` é aceito antes do aperto de mão; valores são validados (inteiros, limites, nomes sanitizados).
-- **Sincronização lockstep**: os dois aparelhos simulam **os dois tabuleiros** com a mesma semente (motor determinístico, ver replays).
-  Uma ação local vale **D = 8 ticks** no futuro (≈133 ms) e é enviada na hora; a mensagem `in` carrega as ações novas e a promessa
-  `u` ("não haverá ação minha antes do tick u"). Um aparelho só executa o tick *t* quando o oponente já prometeu até *t* — se a rede
-  atrasar, o jogo espera (stall) e retoma sem divergir. Não há pausa online.
-- **Detecção de divergência**: a cada 120 ticks (2 s) cada lado envia o hash dos dois tabuleiros; hash diferente encerra a partida
-  ("dessincronizaram") sem registrar estatística. Mensagens inválidas ou atrasadas também abortam.
-- **Queda de conexão**: sem mensagens por 7 s (ou soquete fechado) o outro lado vence. Há `ping` a cada ~1 s.
+- **Protocolo** (`js/net.js`, versão 2, JSON por linha): `hello{p,eng,name}` / `nack` / `start{seed}` / `again` / `in{u,e}` / `h{t,h}` / `p{t}` / `pong{t}` / `bye`.
+  Nada além de `hello` é aceito antes do aperto de mão; valores são validados (inteiros, limites, nomes sanitizados). Versão de protocolo diferente é recusada.
+- **Sincronização por previsão com correção (rollback)** — latência dos seus comandos ≈ 0:
+  os dois aparelhos simulam **os dois tabuleiros** com a mesma semente (motor determinístico, ver replays). Suas ações valem **no próximo tick**
+  (≤ 16 ms) e são enviadas **no instante do toque**. O tabuleiro do oponente é *previsto* sem ação nova; quando uma ação dele chega com tick
+  já simulado, o jogo volta ao *snapshot* daquele tick e re-simula em silêncio até o presente (sem repetir som/efeitos). A mensagem `in`
+  carrega as ações novas e a promessa monotônica `u` ("não haverá ação minha antes do tick u+1"). Janela: o jogo só prevê até 30 ticks (≈ 0,5 s)
+  além do que o oponente já confirmou (depois espera) e guarda 40 snapshots. Custo medido: ~0,3–1 ms por correção com latências de rede local.
+- **Fim de partida confirmado**: derrota/vitória só vale quando todas as ações anteriores ao fim são conhecidas; o estado final vem do snapshot
+  do tick do fim, idêntico nos dois aparelhos (um topo "previsto" que depois some com uma ação atrasada é desfeito).
+- **Detecção de divergência**: a cada 120 ticks cada lado envia o hash do estado **confirmado** (a partir dos snapshots) dos dois tabuleiros;
+  hash diferente encerra a partida ("dessincronizaram") sem registrar estatística. Mensagens inválidas, fora de ordem ou além da janela também abortam.
+- **Queda de conexão**: sem mensagens por 7 s (ou soquete fechado) o outro lado vence. `p`/`pong` a cada ~0,5 s (lobby) / ~1 s (partida) medem o ping mostrado na tela.
+- **Baixa latência no Android**: `TCP_NODELAY` + `IPTOS_LOWDELAY`, e `WifiLock` em modo de baixa latência (`WIFI_MODE_FULL_LOW_LATENCY`, Android 10+; `HIGH_PERF` antes)
+  enquanto houver sala/partida (permissão `WAKE_LOCK`).
 - **Resultado**: modo 10 ("Online (rede local)") nas estatísticas/conquistas do perfil local; fora do ranking oficial e sem replay.
 
 ## Testes
 `tests/net.test.js` simula dois aparelhos com uma rede falsa (latência 0 a 25 quadros, jitter, corte, adulteração, mensagens inválidas, desistência,
-revanche) e confere tabuleiros idênticos; `tests/java/LanNetTest.java` testa sockets, ordem, UTF-8, limite de linha, recusa do segundo cliente,
+revanche) e compara cada partida com uma **simulação de referência offline** alimentada pelo registro real das ações (mesmo hash final, mesmos ticks e vencedor); `tests/java/LanNetTest.java` testa sockets, ordem, UTF-8, limite de linha, recusa do segundo cliente,
 descoberta UDP e erros (roda no CI).

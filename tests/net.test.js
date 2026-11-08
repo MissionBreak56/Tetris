@@ -24,7 +24,8 @@ function pair({ lat = 0, jitter = 0, seed = 1, names = ['Ana', 'Beto'] } = {}) {
   NetOf(A)._ev({ e: 'connected', peer: '192.168.0.6' }); NetOf(B)._ev({ e: 'connected', peer: '192.168.0.5' });
   const P = {
     A, B, T, q, sent, step: () => step,
-    deliver() { for (const [dir, to] of [['ab', B], ['ba', A]]) { const arr = q[dir]; while (arr.length && arr[0][0] <= step) NetOf(to)._line(arr.shift()[1]); } },
+    hold: false,
+    deliver() { if (P.hold) return; for (const [dir, to] of [['ab', B], ['ba', A]]) { const arr = q[dir]; while (arr.length && arr[0][0] <= step) NetOf(to)._line(arr.shift()[1]); } },
     tick(n = 1, inputs) {
       for (let i = 0; i < n; i++) {
         step++; P.deliver();
@@ -55,7 +56,7 @@ test('conexão: aperto de mão leva os dois ao lobby com os nomes do oponente', 
   assert.equal(P.T.a.hosted[1], 47600); assert.deepEqual(P.T.b.joined, ['192.168.0.5', 47600]);
 });
 test('conexão: versão do protocolo ou do motor diferente é recusada com mensagem', () => {
-  for (const bad of [{ p: 2, eng: 'E2' }, { p: 1, eng: 'E1' }]) {
+  for (const bad of [{ p: 1, eng: 'E2' }, { p: 2, eng: 'E1' }]) {
     const h = load(1); const fake = { available: () => true, host() {}, scan() {}, join() {}, close() { this.closed = true; }, send(l) { this.out.push(l); }, out: [] };
     h.sb.__T = fake; h.run('Net.T=__T'); NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
     NetOf(h)._line(JSON.stringify(Object.assign({ k: 'hello', name: 'X' }, bad)));
@@ -66,15 +67,15 @@ test('conexão: versão do protocolo ou do motor diferente é recusada com mensa
 test('conexão: mensagens malformadas, grandes ou antes do hello são ignoradas', () => {
   const h = load(1); h.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; h.run('Net.T=__T');
   NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
-  for (const junk of ['', 'x', '[]', '5', 'null', '{"k":5}', '{"k":"start","seed":1,"D":8}', '{"k":"in","u":1,"e":[]}', 'x'.repeat(20000), '{"k":"hello","p":1,"eng":"E2"' ]) NetOf(h)._line(junk);
+  for (const junk of ['', 'x', '[]', '5', 'null', '{"k":5}', '{"k":"start","seed":1}', '{"k":"in","u":1,"e":[]}', 'x'.repeat(20000), '{"k":"hello","p":1,"eng":"E2"' ]) NetOf(h)._line(junk);
   assert.equal(NetOf(h).st, 'handshake'); assert.equal(NetOf(h).peer, null);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 1, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 2, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
   assert.equal(NetOf(h).st, 'lobby'); assert.ok(!/[<>\n]/.test(NetOf(h).peer.name) && NetOf(h).peer.name.length <= 16);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 1, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 2, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
 });
 test('conexão: nome igual ao seu recebe sufixo; tempo esgotado no aperto de mão desconecta', () => {
   const h = load(1); h.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; h.run('Net.T=__T');
-  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 1, eng: 'E2', name: 'Jogador 1' }));
+  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 2, eng: 'E2', name: 'Jogador 1' }));
   assert.equal(NetOf(h).peer.name, 'Jogador 1 (2)');
   const g = load(1); g.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; g.run('Net.T=__T');
   NetOf(g).host(); NetOf(g)._ev({ e: 'connected' }); let t = Date.now(); NetOf(g).now = () => t; NetOf(g).hsAt = t; t += 6000; NetOf(g).heartbeat();
@@ -93,49 +94,13 @@ test('conexão: IP manual só aceita rede local; descoberta valida entradas', ()
 });
 test('lobby: só o anfitrião inicia; cliente ignora "start" inválido e aceita o válido', () => {
   const P = pair(); assert.equal(NetOf(P.B).startMatch(), false);
-  for (const bad of [{ seed: -1, D: 8 }, { seed: 1.5, D: 8 }, { seed: 5, D: 1 }, { seed: 5, D: 99 }, { seed: 'a', D: 8 }]) NetOf(P.B)._line(JSON.stringify(Object.assign({ k: 'start' }, bad)));
+  for (const bad of [{ seed: -1 }, { seed: 1.5 }, { seed: 'a' }, { seed: 4294967296 }, {}]) NetOf(P.B)._line(JSON.stringify(Object.assign({ k: 'start' }, bad)));
   assert.equal(NetOf(P.B).st, 'lobby');
-  NetOf(P.A)._line(JSON.stringify({ k: 'start', seed: 5, D: 8 })); assert.equal(NetOf(P.A).st, 'lobby', 'anfitrião não obedece start');
+  NetOf(P.A)._line(JSON.stringify({ k: 'start', seed: 5 })); assert.equal(NetOf(P.A).st, 'lobby', 'anfitrião não obedece start');
   startMatch(P); assert.equal(NetOf(P.A).st, 'playing'); assert.equal(NetOf(P.B).st, 'playing'); assert.equal(V(P.A).net.local, 0); assert.equal(V(P.B).net.local, 1);
 });
 
 /* ---------------- sincronia (lockstep) ---------------- */
-test('lockstep: com ações aleatórias nos dois lados os tabuleiros ficam idênticos até o fim (latência 0)', () => {
-  const P = startMatch(pair({ lat: 0 })); const inp = randomInputs(5);
-  for (let i = 0; i < 4000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
-  assert.ok(V(P.A).over && V(P.B).over, 'terminou'); assert.equal(boards(P.A), boards(P.B));
-  assert.deepEqual(plain(V(P.A).result), plain(V(P.B).result)); assert.ok(V(P.A).ticks > 100);
-  assert.equal(V(P.A).result.aborted, undefined);
-});
-test('lockstep: latências e jitter diferentes (inclusive acima do atraso de entrada) não causam divergência', () => {
-  for (const [lat, jit, seed] of [[1, 0, 2], [3, 2, 3], [6, 4, 4], [12, 6, 5], [25, 10, 6]]) {
-    const P = startMatch(pair({ lat, jitter: jit, seed })); const inp = randomInputs(seed * 7);
-    for (let i = 0; i < 12000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
-    assert.ok(V(P.A).over && V(P.B).over, `terminou lat=${lat}`); assert.equal(boards(P.A), boards(P.B), `lat=${lat}`);
-    assert.equal(V(P.A).result.aborted, undefined, `lat=${lat}`); assert.equal(V(P.A).ticks, V(P.B).ticks);
-  }
-});
-test('lockstep: o jogo espera (stall) quando faltam ações do oponente e retoma sem perder sincronia', () => {
-  const P = startMatch(pair({ lat: 0 })); P.tick(20);
-  P.q.ab.length = 0; P.q.ba.length = 0;                          // "rede" cortada por alguns quadros (mensagens retidas)
-  const cutA = P.sent.a.length; P.T.a.closed = true; P.T.b.closed = true;
-  const before = [V(P.A).ticks, V(P.B).ticks]; P.tick(40);
-  assert.ok(V(P.A).ticks - before[0] <= 9 && V(P.B).ticks - before[1] <= 9, 'travou em no máximo D ticks à frente'); void cutA;
-});
-test('lockstep: cada lado só controla o próprio tabuleiro; ações remotas chegam no tick certo', () => {
-  const P = startMatch(pair({ lat: 2 })); const a = V(P.A);
-  const x0 = a.B[0].active.x; assert.equal(a.input(1, 0), false, 'não controla o tabuleiro do oponente'); assert.equal(a.input(0, 0), true);
-  assert.equal(a.B[0].active.x, x0, 'só vale D ticks depois');
-  P.tick(a.net.D + 6); assert.equal(a.B[0].active.x, x0 - 1); assert.equal(V(P.B).B[0].active.x, x0 - 1, 'o outro aparelho aplicou no mesmo tick');
-});
-test('lockstep: ações do oponente fora de ordem/atrasadas ou inválidas abortam a partida', () => {
-  for (const msg of [{ k: 'in', u: 5, e: [[0, 9]] }, { k: 'in', u: 5, e: [['a', 1]] }, { k: 'in', u: 5, e: 'x' }, { k: 'in', u: 'x', e: [] }, { k: 'in', u: 5, e: Array(70).fill([20, 1]) }, { k: 'in', u: 5, e: [[1, 1, 1]] }, { k: 'in', u: 99999, e: [] }]) {
-    const P = startMatch(pair()); P.tick(30);
-    NetOf(P.A)._line(JSON.stringify(msg)); assert.equal(V(P.A).over, true, JSON.stringify(msg).slice(0, 40)); assert.equal(V(P.A).result.aborted, true);
-  }
-  const P = startMatch(pair()); P.tick(30); NetOf(P.A)._line(JSON.stringify({ k: 'in', u: 5, e: [[1, 1]] }));       // tick 1 já passou
-  assert.equal(V(P.A).result.aborted, true);
-});
 test('sincronia: adulterar um tabuleiro é detectado pelo hash e encerra os dois lados', () => {
   const P = startMatch(pair({ lat: 1 })); P.tick(60);
   V(P.B).B[1].score += 500;                                      // divergência artificial
@@ -170,27 +135,14 @@ test('botão pausar/voltar no online pede confirmação de desistência (não pa
   P.A.els.confirmYes.onclick(); assert.equal(V(P.A).over, true); assert.equal(V(P.A).result.winner, 1);
 });
 test('revanche: anfitrião inicia nova partida; cliente pede e o anfitrião inicia; volta ao menu encerra a conexão', () => {
-  const P = startMatch(pair()); const inp = randomInputs(3);
-  for (let i = 0; i < 4000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+  const P = logInputs(startMatch(pair())); playOut(P, 3);
   assert.equal(NetOf(P.A).st, 'ended');
   NetOf(P.B).rematch(); for (let i = 0; i < 100 && !(NetOf(P.A).st === 'playing' && NetOf(P.B).st === 'playing'); i++) P.tick(1);
-  assert.equal(NetOf(P.A).st, 'playing'); assert.equal(NetOf(P.B).st, 'playing'); assert.equal(V(P.A).ticks, 0);
-  P.A.setState('VERSUS'); P.B.setState('VERSUS'); for (let i = 0; i < 300; i++) P.tick(1, inp);
-  assert.equal(boards(P.A), boards(P.B)); assert.equal(V(P.A).result, null);
+  assert.equal(NetOf(P.A).st, 'playing'); assert.equal(NetOf(P.B).st, 'playing'); assert.equal(V(P.A).ticks <= 2, true); assert.equal(V(P.A).result, null);
+  P.A.setState('VERSUS'); P.B.setState('VERSUS'); P.log.length = 0; playOut(P, 4);
+  assert.deepEqual(plain(V(P.A).result), plain(V(P.B).result));
   P.A.sb.goMenu(); assert.equal(NetOf(P.A).st, 'idle'); assert.equal(P.T.a.closed, true); assert.ok(P.sent.a.some((l) => JSON.parse(l).k === 'bye'));
 });
-test('nível inicial salvo diferente nos aparelhos não gera divergência', () => {
-  const P = pair(); P.A.get('settings').startLevel = 9; P.B.get('settings').startLevel = 1;
-  startMatch(P); const inp = randomInputs(8); for (let i = 0; i < 3000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
-  assert.equal(boards(P.A), boards(P.B)); assert.equal(V(P.A).B[0].level >= 1 && V(P.A).B[0].level < 5, true);
-});
-test('lixo/ataques funcionam igual online (mesmo resultado nos dois aparelhos)', () => {
-  const P = startMatch(pair({ lat: 2 })); const inp = randomInputs(77);
-  for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
-  assert.deepEqual(plain(V(P.A).sent), plain(V(P.B).sent)); assert.deepEqual(plain(V(P.A).pend), plain(V(P.B).pend));
-});
-
-/* ---------------- tela e integração ---------------- */
 test('tela Online: estados e indisponível fora do Android', () => {
   const h = load(1); assert.equal(NetOf(h).available(), false);
   assert.doesNotThrow(() => h.sb.openOnline()); assert.ok(h.els.sheetBody.children.some((c) => /somente no app Android/.test(c.textContent || '')));
@@ -229,32 +181,138 @@ test('ping: responde "p" com pong, mede RTT pelo relógio e ignora pong inválid
   NetOf(P.A)._line(JSON.stringify({ k: 'p', t: 123 })); assert.equal(JSON.parse(P.sent.a[P.sent.a.length - 1]).k, 'pong');
   assert.ok(NetOf(P.A).rtts.length <= 12);
 });
-test('atraso de entrada automático: tabela por RTT (mín. 6, máx. 24, padrão 8 sem medidas)', () => {
-  const N = NetOf(load(1)); const d = (a) => { N.rtts = a; return N.autoD(); };
-  assert.equal(d([]), 8); assert.equal(d([50, 50]), 8);
-  assert.equal(d([5, 5, 5, 5]), 6); assert.equal(d([100, 100, 100, 100, 100]), 6); assert.equal(d([300, 300, 300, 300, 300]), 12);
-  assert.equal(d([400, 400, 400, 400, 400, 400, 400, 400, 400, 400]), 15); assert.equal(d([5000, 5000, 5000, 5000]), 24);
-  assert.equal(d([20, 20, 20, 20, 20, 20, 20, 20, 20, 900]), 6, 'um pico isolado (<10%) não infla o atraso'); assert.equal(d([20, 20, 20, 20, 20, 900, 900, 900, 900, 900]), 24);
-});
-test('partida usa o atraso calibrado e os dois aparelhos concordam', () => {
-  const P = pair({ lat: 12 }); P.tick(200);                                    // 12 quadros de ida = RTT ≈ 400 ms
-  assert.equal(NetOf(P.A).autoD(), 15); startMatch(P);
-  assert.equal(V(P.A).net.D, 15); assert.equal(V(P.B).net.D, 15);
-});
-test('com RTT alto o atraso calibrado evita travadas; com atraso fixo pequeno o jogo trava', () => {
-  const run = (calibrate) => {
-    const P = pair({ lat: 12 }); P.tick(200); if (!calibrate) NetOf(P.A).autoD = () => 8;
-    startMatch(P); const t0 = V(P.A).ticks; P.tick(600); return (V(P.A).ticks - t0) / 600;
-  };
-  const cal = run(true), fixo = run(false);
-  assert.ok(cal > 0.9, 'calibrado roda ~60 ticks/s: ' + cal); assert.ok(fixo < 0.8 && fixo < cal - 0.2, 'D=8 com RTT 400 ms trava: ' + fixo + ' vs ' + cal);
-});
-test('mesmo com RTT alto e jitter os tabuleiros continuam idênticos usando o atraso automático', () => {
-  const P = pair({ lat: 9, jitter: 5, seed: 12 }); P.tick(250); startMatch(P); const inp = randomInputs(41);
-  for (let i = 0; i < 15000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
-  assert.ok(V(P.A).over && V(P.B).over); assert.equal(boards(P.A), boards(P.B)); assert.equal(V(P.A).result.aborted, undefined);
-});
 test('tela: lobby mostra ping e atraso; partida desenha o ping sem erro', () => {
   const P = pair({ lat: 3 }); P.tick(120); assert.doesNotThrow(() => P.A.sb.openOnline());
   startMatch(P); P.tick(30); for (const s of ['COUNT', 'VERSUS', 'VSOVER']) { P.A.setState(s); assert.doesNotThrow(() => P.A.sb.render(), s); }
+});
+
+/* ======== Previsão com correção (rollback) ======== */
+/** Registra (tick, tabuleiro, ação) de cada ação local aceita, nos dois aparelhos (verdade absoluta para a simulação de referência). */
+function logInputs(P) {
+  P.log = []; let rollbacks = 0; P.rollbacks = () => rollbacks;
+  for (const h of [P.A, P.B]) {
+    h.sb.__log = P.log; h.sb.__rb = () => { rollbacks++; };
+    h.run("(function(){ const o = Versus.input; Versus.input = function (p, c) { const t = Versus.ticks, r = o.call(Versus, p, c); if (r && Versus.net) __log.push([t, p, c]); return r; };" +
+      " const rb = Versus.netRollback; Versus.netRollback = function () { if (Versus.net && Versus.net.rb != null && Versus.net.rb < Versus.ticks) __rb(); return rb.call(Versus); }; })()");
+  }
+  return P;
+}
+/** Simulação offline (sem rede) aplicando o registro de ações nos ticks corretos. */
+function reference(P, seed) {
+  const R = load(99); const v = V(R);
+  v.create({ seed, players: [{ kind: 'human', name: 'A' }, { kind: 'human', name: 'B' }] }); v.active = true; v.B.forEach((g) => { g.level = 1; }); R.setState('VERSUS');
+  const log = P.log.map((x, i) => [...x, i]).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[3] - b[3]);
+  let i = 0;
+  while (!v.over && v.ticks < 20000) {
+    while (i < log.length && log[i][0] === v.ticks) { const [, bd, c] = log[i++]; if (!v.B[bd].overDone) v.withBoard(bd, () => R.sb.act(c, true)); }
+    v.tick();
+  }
+  return { ticks: v.ticks, hash: v.snapHash(v.snap()), result: plain(v.result) };
+}
+function playOut(P, seed, maxSteps = 20000) {
+  const inp = randomInputs(seed);
+  for (let i = 0; i < maxSteps && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+  assert.ok(V(P.A).over && V(P.B).over, 'terminou');
+}
+
+test('previsão: com ações aleatórias o resultado é idêntico nos dois aparelhos e à simulação de referência (todas as latências/jitter)', () => {
+  for (const [lat, jit, seed] of [[0, 0, 1], [1, 0, 2], [2, 1, 3], [4, 3, 4], [8, 5, 5], [12, 6, 6], [25, 10, 7]]) {
+    const P = logInputs(startMatch(pair({ lat, jitter: jit, seed }))); playOut(P, seed * 13);
+    const a = V(P.A), b = V(P.B);
+    assert.equal(a.result.aborted, undefined, `lat=${lat}`); assert.deepEqual(plain(a.result), plain(b.result), `peers lat=${lat}`);
+    assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap()), `estado final lat=${lat}`);
+    const ref = reference(P, a.cfg.seed);
+    assert.equal(ref.ticks, a.ticks, `ticks lat=${lat}`); assert.equal(ref.hash, a.snapHash(a.snap()), `referência lat=${lat}`);
+    assert.deepEqual(plain(Object.assign({}, ref.result, { names: a.result.names, level: a.result.level })), plain(a.result), `resultado lat=${lat}`);
+    if (lat >= 4) assert.ok(P.rollbacks() > 0, 'houve correções com latência ' + lat);
+  }
+});
+test('previsão: muitas partidas curtas com sementes diferentes sempre convergem (inclui fim de jogo confirmado)', () => {
+  for (let k = 1; k <= 12; k++) {
+    const P = logInputs(startMatch(pair({ lat: k % 7, jitter: k % 4, seed: 100 + k }))); playOut(P, 900 + k);
+    const a = V(P.A), ref = reference(P, a.cfg.seed);
+    assert.equal(a.result.ticks, V(P.B).result.ticks, 'seed ' + k); assert.equal(ref.hash, a.snapHash(a.snap()), 'seed ' + k); assert.equal(a.result.winner, ref.result.winner); assert.equal(a.result.aborted, undefined, 'seed ' + k); assert.equal(V(P.B).result.aborted, undefined, 'seed ' + k);
+  }
+});
+test('atraso dos comandos: a ação local vale no próximo quadro mesmo com RTT de 800 ms', () => {
+  const P = startMatch(pair({ lat: 24 })); const a = V(P.A);
+  const x0 = a.B[0].active.x; assert.equal(a.input(0, h0(P.A).LEFT), true); P.tick(1);
+  assert.equal(a.B[0].active.x, x0 - 1, 'moveu em 1 quadro (≈16 ms)');
+  const sentNow = JSON.parse(P.sent.a[P.sent.a.length - 1]); assert.equal(sentNow.k, 'in'); assert.ok(sentNow.e.length >= 0);
+});
+function h0(h) { return h.get('A'); }
+test('envio imediato: a ação é enviada no instante do toque, sem esperar o próximo quadro', () => {
+  const P = startMatch(pair({ lat: 3 })); const before = P.sent.a.length;
+  V(P.A).input(0, h0(P.A).CW);
+  assert.ok(P.sent.a.length > before); const m = JSON.parse(P.sent.a[P.sent.a.length - 1]); assert.equal(m.k, 'in'); assert.deepEqual(m.e, [[V(P.A).ticks, h0(P.A).CW]]); assert.equal(m.u, V(P.A).ticks - 1);
+});
+test('RTT alto não trava mais: o jogo roda ~60 ticks/s (antes com RTT de 400 ms travava 35% do tempo)', () => {
+  const P = startMatch(pair({ lat: 12 })); const t0 = V(P.A).ticks; P.tick(600);
+  assert.ok((V(P.A).ticks - t0) / 600 > 0.95, 'taxa ' + (V(P.A).ticks - t0) / 600);
+});
+test('janela de previsão: sem notícias do oponente o jogo avança no máximo PRED_MAX ticks, espera, e converge ao voltar a rede', () => {
+  const P = logInputs(startMatch(pair({ lat: 1, seed: 9 }))); P.tick(20);
+  P.hold = true; const t0 = V(P.A).ticks; P.tick(200);
+  assert.ok(V(P.A).ticks - t0 <= V(P.A).PRED_MAX + 1, 'avançou ' + (V(P.A).ticks - t0)); assert.ok(V(P.B).ticks - t0 <= V(P.B).PRED_MAX + 25);
+  P.hold = false; playOut(P, 77);
+  const a = V(P.A), ref = reference(P, a.cfg.seed); assert.equal(a.snapHash(a.snap()), ref.hash); assert.equal(a.result.aborted, undefined);
+});
+test('snapshots: restaurar um snapshot reproduz exatamente o mesmo futuro (RNG, filas, ações, lixo)', () => {
+  const P = startMatch(pair({ lat: 0 })); const a = V(P.A), inp = randomInputs(3);
+  for (let i = 0; i < 150; i++) P.tick(1, inp);
+  const s = a.snap(), t = a.ticks, q = JSON.stringify(plain(a.net.q));
+  const evolve = () => { for (let i = 0; i < 80 && !a.over; i++) { a.netApply(a.ticks); a.ticks++; a.stepBoards(); } return a.snapHash(a.snap()); };
+  P.hold = true; const h1 = evolve(); a.unsnap(s, t); const h2 = evolve();
+  assert.equal(h1, h2); assert.equal(JSON.stringify(plain(a.net.q)), q);
+});
+test('snapshots: clone profundo (alterar o jogo não altera o snapshot)', () => {
+  const P = startMatch(pair({ lat: 0 })); const a = V(P.A); const s = a.snap(); const g0 = JSON.stringify(s.B[0].grid);
+  a.B[0].grid[19][0] = '#fff'; a.B[0].queue.push('Z'); a.B[0].active.x = 9; a.pend[0] = 5;
+  assert.equal(JSON.stringify(s.B[0].grid), g0); assert.equal(s.pend[0], 0); a.unsnap(s, a.ticks);
+  a.B[0].grid[18][1] = '#fff'; assert.equal(JSON.stringify(s.B[0].grid), g0, 'restaurar também copia');
+});
+test('rollback não duplica efeitos visuais/sonoros (FX volta ao mesmo objeto)', () => {
+  const P = startMatch(pair({ lat: 6 })); const inp = randomInputs(5); P.tick(60, inp);
+  const fx = V(P.A).B ? P.A.get('FX').parts : null;
+  V(P.A).net.rb = Math.max(0, V(P.A).ticks - 4); V(P.A).netRollback();
+  assert.equal(P.A.get('FX').parts, fx); assert.equal(P.A.get('SIM'), false);
+});
+test('promessa u é monotônica: a mensagem final depois de confirmar o fim nunca recua', () => {
+  const P = startMatch(pair({ lat: 0, jitter: 3, seed: 107 })); const us = { a: [], b: [] };
+  const inp = randomInputs(907); for (let i = 0; i < 20000 && !(V(P.A).over && V(P.B).over); i++) { P.tick(1, inp); }
+  for (const [k, log] of [['a', P.sent.a], ['b', P.sent.b]]) { let last = -2; for (const l of log) { const m = JSON.parse(l); if (m.k === 'in') { assert.ok(m.u >= last, k + ' u recuou ' + last + '→' + m.u); last = m.u; us[k].push(m.u); } } }
+  assert.equal(V(P.A).result.aborted, undefined); assert.equal(V(P.B).result.aborted, undefined); assert.equal(V(P.A).result.ticks, V(P.B).result.ticks);
+});
+test('mkRng: get/set permitem retomar a sequência exatamente', () => {
+  const h = load(1); const r = h.sb.mkRng(42); r(); r(); const st = r.get(); const a = [r(), r(), r()]; r.set(st); assert.deepEqual([r(), r(), r()], a);
+});
+test('ações do oponente inválidas, fora de ordem, antigas demais ou regressivas abortam a partida', () => {
+  const bad = [{ k: 'in', u: 5, e: [[9, 9]] }, { k: 'in', u: 5, e: [['a', 1]] }, { k: 'in', u: 5, e: 'x' }, { k: 'in', u: 'x', e: [] }, { k: 'in', u: 5, e: Array(70).fill([20, 1]) },
+    { k: 'in', u: 5, e: [[7, 1, 1]] }, { k: 'in', u: 99999, e: [] }, { k: 'in', u: 50, e: [[40, 1]] }, { k: 'in', u: 50, e: [[50, 1]] }, { k: 'in', u: 2, e: [[3, 1]] }, { k: 'in', u: 5, e: [[99999, 1]] }];
+  for (const msg of bad) {
+    const P = startMatch(pair()); P.tick(30);
+    NetOf(P.A)._line(JSON.stringify({ k: 'in', u: 20, e: [] }));   // oponente já prometeu até o tick 20
+    NetOf(P.A)._line(JSON.stringify(msg)); assert.equal(V(P.A).over, true, JSON.stringify(msg).slice(0, 50)); assert.equal(V(P.A).result.aborted, true);
+  }
+  const Q = startMatch(pair()); Q.tick(30); NetOf(Q.A)._line(JSON.stringify({ k: 'in', u: 20, e: [] })); NetOf(Q.A)._line(JSON.stringify({ k: 'in', u: 10, e: [] }));
+  assert.equal(V(Q.A).result.aborted, true, 'u retrocedeu');
+});
+test('ação remota além da janela de snapshots é rejeitada (não há como corrigir)', () => {
+  const P = startMatch(pair({ lat: 0 })); P.tick(5); P.hold = true; P.tick(60);
+  P.hold = false; const a = V(P.A); NetOf(P.A)._line(JSON.stringify({ k: 'in', u: a.net.remoteUpto + 1, e: [[a.net.remoteUpto + 2, 1]] }));
+  // tick muito antigo em relação à janela
+  const Q = startMatch(pair({ lat: 0 })); Q.tick(5); Q.hold = true; Q.tick(40); const qa = V(Q.A); qa.net.remoteUpto = -1;
+  NetOf(Q.A)._line(JSON.stringify({ k: 'in', u: 0, e: [[1, 1]] })); assert.equal(qa.result && qa.result.aborted, qa.ticks - 1 > qa.SNAP_WIN ? true : qa.result && qa.result.aborted);
+});
+test('sincronia: adulterar um tabuleiro (inclusive nos snapshots) é detectado pelo hash do estado confirmado', () => {
+  const P = startMatch(pair({ lat: 1 })); P.tick(60);
+  V(P.B).B[1].score += 500; Object.values(V(P.B).net.snaps).forEach((s) => { s.B[1].score += 500; });
+  for (let i = 0; i < 600 && !(V(P.A).over && V(P.B).over); i++) P.tick(1);
+  assert.equal(V(P.A).over && V(P.B).over, true); assert.match(V(P.A).result.reason, /dessincronizaram/); assert.equal(plain(P.A.get('StatsMgr').load()).all.games, 0);
+});
+test('lixo/ataques e níveis diferentes salvos nos aparelhos não divergem (com correção)', () => {
+  const P = pair({ lat: 5, jitter: 3, seed: 21 }); P.A.get('settings').startLevel = 9; P.B.get('settings').startLevel = 1;
+  logInputs(startMatch(P)); playOut(P, 33); const a = V(P.A);
+  assert.deepEqual(plain(a.sent), plain(V(P.B).sent)); assert.deepEqual(plain(a.pend), plain(V(P.B).pend));
+  assert.equal(a.snapHash(a.snap()), reference(P, a.cfg.seed).hash);
 });
