@@ -24,6 +24,14 @@ No lobby e durante a partida os aparelhos trocam `p`/`pong` com carimbo de tempo
 Não há mais "atraso de entrada" fixo: o ping só afeta o quão rápido você *vê* as jogadas do oponente (≈ RTT/2) e quantas correções ocorrem.
 Acima de ~500 ms de ida o jogo espera o oponente (janela de previsão) — mesmo assim nunca dessincroniza.
 
+## Tela
+No online **cada jogador vê só a sua tela**, em tela cheia, igual ao modo solo (tabuleiro grande, Hold, Next, pontuação, mensagens de TETRIS/T-SPIN/COMBO e os mesmos gestos).
+O que é específico da partida online:
+- uma **miniatura do tabuleiro do oponente** na coluna esquerda, abaixo do Hold (pilha, peça atual, lixo a caminho e K.O.). Dá para desligar em **Ajustes → Miniatura do oponente (online)**;
+- uma **barra vermelha** na margem esquerda da sua moldura mostrando quantas linhas de lixo estão a caminho;
+- "vs Nome · ping" sob a pontuação e **WIN / K.O.** sobre o seu tabuleiro ao final.
+O Versus local (contra a IA ou dois jogadores no mesmo aparelho) continua com a tela dividida.
+
 ## Arquitetura
 - **Camada de rede** (`LanNet.java`, Java puro, testado na JVM): anfitrião = `ServerSocket` TCP 47600 + anúncio por broadcast UDP (47601)
   até alguém conectar; cliente = `scan` (escuta anúncios) ou `join` por IP. Uma única conexão; mensagens em **linhas UTF-8**

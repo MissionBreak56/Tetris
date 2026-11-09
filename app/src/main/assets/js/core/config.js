@@ -36,7 +36,7 @@ function readSettings(){ return {
   sound: LS('isSound')!=='0', music: LS('isMusic')!=='0',
   ghost: LS('isShowGhost')!=='0', vib: LS('isVabiration')==='1',
   touch: LS('isTouchControl')!=='0', theme: Theme.parseId(LS('index_bg')), skin: Skins.valid(LS('skin'))?LS('skin'):'classic',
-  musicVol: readVol('musicVol'), sfxVol: readVol('sfxVol'), fx: LS('isFx')!=='0',
+  musicVol: readVol('musicVol'), sfxVol: readVol('sfxVol'), fx: LS('isFx')!=='0', oppView: LS('oppView')!=='0',
   startLevel: Math.min(15,Math.max(1,parseInt(LS('startLevel'),10)||1))
 }; }
 const settings=readSettings();
@@ -50,5 +50,5 @@ function saveSettings(){
   SV('isSound',settings.sound?1:0); SV('isMusic',settings.music?1:0);
   SV('isShowGhost',settings.ghost?1:0); SV('isVabiration',settings.vib?1:0);
   SV('isTouchControl',settings.touch?1:0); SV('index_bg',settings.theme); SV('skin',settings.skin);
-  SV('startLevel',settings.startLevel); SV('musicVol',settings.musicVol); SV('sfxVol',settings.sfxVol); SV('isFx',settings.fx?1:0);
+  SV('startLevel',settings.startLevel); SV('musicVol',settings.musicVol); SV('sfxVol',settings.sfxVol); SV('isFx',settings.fx?1:0); SV('oppView',settings.oppView?1:0);
 }

@@ -7,14 +7,20 @@ const Versus = {
   PRED_MAX: 30, SNAP_WIN: 40,
   active: false, net: null, cfg: null, B: [], pend: [0, 0], sent: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,
   layouts() {
+    if (this.net) { this.cellV = CELL; this.lay = [L, L]; return; }          // online: cada um vê SÓ a sua tela (layout solo); gestos usam o tamanho de célula solo
     const hw = W / 2, C = Math.max(10, Math.floor(Math.min((hw - 10) / (COLS + 1), (H * 0.78) / (ROWS + 3)))), pad = C * 0.4;
     this.cellV = C;
     this.lay = [0, 1].map((i) => { const bw = COLS * C, bh = ROWS * C, bx = Math.round(i * hw + (hw - bw) / 2), by = Math.round((H - bh) / 2 + C * 1.4);
       return { pad, bw, bh, bx, by, fl: bx - pad, fr: bx + bw + pad, ft: by - pad, fb: by + bh + pad, side: C * 1.7, hudY: by - pad - C * 2.8 }; });
   },
   withBoard(i, fn) {
-    const pg = G, pl = Object.assign({}, L), pc = CELL, ps = SIM;
-    G = this.B[i]; Object.assign(L, this.lay[i]); CELL = this.cellV; if (G.ai || (this.net && i !== this.net.local)) SIM = true;
+    const pg = G, ps = SIM, net = this.net, remote = !!(net && i !== net.local);
+    if (net) {                                                       // online: mesmo layout solo; o tabuleiro do oponente roda em silêncio e sem efeitos na SUA tela
+      let fx = null; G = this.B[i]; if (remote) { SIM = true; fx = { parts: FX.parts, flash: FX.flash, lock: FX.lock, trail: FX.trail, shake: FX.shake, pulse: FX.pulse, screen: FX.screen }; FX.parts = []; FX.flash = []; FX.lock = []; FX.trail = null; }
+      try { return fn(); } finally { G = pg; SIM = ps; if (fx) { FX.parts = fx.parts; FX.flash = fx.flash; FX.lock = fx.lock; FX.trail = fx.trail; FX.shake = fx.shake; FX.pulse = fx.pulse; FX.screen = fx.screen; } }
+    }
+    const pl = Object.assign({}, L), pc = CELL;
+    G = this.B[i]; Object.assign(L, this.lay[i]); CELL = this.cellV; if (G.ai) SIM = true;
     try { return fn(); } finally { G = pg; Object.assign(L, pl); CELL = pc; SIM = ps; }
   },
   humans() { return this.cfg.players.filter((p) => p.kind === 'human').length; },
@@ -22,8 +28,9 @@ const Versus = {
   create(cfg) {
     const seed = cfg.seed != null ? cfg.seed >>> 0 : (Math.random() * 4294967296) >>> 0;
     this.cfg = cfg; this.pend = [0, 0]; this.sent = [0, 0]; this.ticks = 0; this.acc = 0; this.over = false; this.result = null; this.touch = [null, null];
-    this.rng = mkRng(seed ^ 0x9e3779b9); this.layouts(); this.B = [];
+    this.rng = mkRng(seed ^ 0x9e3779b9); this.B = [];
     this.net = cfg.net ? { local: cfg.net.local, q: [{}, {}], remoteUpto: -1, out: [], snaps: {}, rb: null, endTick: null, nextH: Net.HASH_EVERY, hashes: {}, remoteHashes: {} } : null;
+    this.layouts();
     const keep = G;
     for (let i = 0; i < 2; i++) {
       newGame(8, { seed, rules: { levelUps: true } });
@@ -169,6 +176,7 @@ const Versus = {
     }
   },
   render() {
+    if (this.net) { this.renderNet(); return; }
     this.layouts(); for (let i = 0; i < 2; i++) this.withBoard(i, () => { drawFrame('vs' + i); drawBoard(); this.hud(i); });
     if (this.net && Net.ping() != null) txt(Math.round(Net.ping()) + ' ms', W / 2, 14, 12, 'rgba(255,255,255,.6)', 'center', '500');
   },
@@ -272,7 +280,38 @@ Versus.netForfeit = function (loser, why) {
   if (this.over) return; this.B[loser].overDone = true; this.finish();
   if (this.result) this.result.reason = why;
 };
-Versus.attachNote = function (t) { if (G && G.versus) { G.note = { t, ttl: 1.2 }; return true; } return false; };
+/* ---- online: tela cheia do jogador local (igual ao solo) + miniatura opcional do oponente ---- */
+Versus.renderNet = function () {
+  const me = this.net.local, g = this.B[me], op = this.B[1 - me], sv = G;
+  this.layouts(); G = g;
+  try {
+    drawFrame(); drawBoard(); drawHUD();
+    this.netHud(g, op, me);
+  } finally { G = sv; }
+};
+Versus.netHud = function (g, op, me) {
+  const C = CELL, T = TH();
+  const p = Net.ping(), nm = (this.cfg.players[1 - me].name || 'Oponente').slice(0, 14);
+  txt('vs ' + nm + (p != null ? '  ·  ' + Math.round(p) + ' ms' : ''), W / 2, L.hudY + C * 0.95, C * 0.5, 'rgba(255,255,255,.7)', 'center', '600');
+  const pe = this.pend[me];                                           // lixo a caminho: barra vermelha na margem esquerda da moldura
+  if (pe > 0) { const hh = Math.min(pe, ROWS) * C; ctx.fillStyle = '#ff4d4d'; ctx.fillRect(L.bx - L.pad * 0.42, L.by + L.bh - hh, L.pad * 0.3, hh); }
+  if (settings.oppView) {                                             // miniatura do oponente (coluna esquerda, abaixo do Hold)
+    const w = L.hold.w, cs = w / COLS, x0 = L.hold.x, y0 = L.hold.y + L.hold.h + C * 1.3, hh = ROWS * cs;
+    txt(nm.slice(0, 8), x0 + w / 2, y0 - C * 0.45, C * 0.4, '#a9c6ff', 'center', '600');
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(x0, y0, w, hh);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const col = op.grid[r][c]; if (col) { ctx.fillStyle = col; ctx.fillRect(x0 + c * cs, y0 + r * cs, Math.max(1, cs - 0.6), Math.max(1, cs - 0.6)); } }
+    if (op.active && !op.overDone) { ctx.globalAlpha = 0.85; ctx.fillStyle = COLORS[op.active.t]; cells(op.active).forEach(([cx, cy]) => { if (cy >= 0) ctx.fillRect(x0 + cx * cs, y0 + cy * cs, Math.max(1, cs - 0.6), Math.max(1, cs - 0.6)); }); ctx.globalAlpha = 1; }
+    ctx.strokeStyle = T[2]; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, hh - 1);
+    const po = this.pend[1 - me]; if (po > 0) { ctx.fillStyle = '#ff4d4d'; ctx.fillRect(x0 + w + 1, y0 + hh - Math.min(po, ROWS) * cs, 2, Math.min(po, ROWS) * cs); }
+    if (op.overDone) txt('K.O.', x0 + w / 2, y0 + hh / 2, C * 0.6, '#ff6a6a', 'center', '800');
+  }
+  if (g.overDone || this.over) {
+    const win = this.result ? this.result.winner === me : !g.overDone;
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(L.bx, L.by, L.bw, L.bh);
+    txt(g.overDone ? 'K.O.' : (win ? 'WIN' : ''), L.bx + L.bw / 2, L.by + L.bh / 2, C * 2.2, g.overDone ? '#ff6a6a' : '#7dffa0', 'center', '800');
+  }
+};
+Versus.attachNote = function (t) { if (G && G.versus && !Versus.net) { G.note = { t, ttl: 1.2 }; return true; } return false; };
 
 /* ---- teclado e toque (só em VERSUS; o jogo solo usa os manipuladores de input.js) ---- */
 addEventListener('keydown', (e) => {
@@ -300,7 +339,7 @@ function endVsTouch(e, cancel) {
   const t = Versus.touch.find((q) => q && q.id === e.pointerId); if (!t) return;
   const C = Versus.cellV, dx = e.clientX - t.sx, dy = e.clientY - t.sy, dt = performance.now() - t.t, vy = dy / (dt || 1), g = Versus.B[t.p];
   if (!cancel && state === 'VERSUS') {
-    if (!t.moved && dt < 350 && Math.abs(dx) < C * 0.8 && Math.abs(dy) < C * 0.8) Versus.input(t.p, Versus.humans() === 1 && settings.touch && e.clientX < W / 2 ? A.CCW : A.CW);
+    if (!t.moved && dt < 350 && Math.abs(dx) < C * 0.8 && Math.abs(dy) < C * 0.8) Versus.input(t.p, (Versus.net || Versus.humans() === 1) && settings.touch && e.clientX < W / 2 ? A.CCW : A.CW);
     else if (vy > 0.6 / Controls.cfg.swipe && dy > C * 1.5 / Controls.cfg.swipe) Versus.input(t.p, A.HARD);
     else if (vy < -0.6 / Controls.cfg.swipe && dy < -C * 1.5 / Controls.cfg.swipe) Versus.input(t.p, A.HOLD);
   }

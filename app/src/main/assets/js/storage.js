@@ -15,7 +15,7 @@ const Store = {
   gsetJSON(k, v) { try { return this.gset(k, JSON.stringify(v)); } catch (e) { return false; } },
 };
 /* Chaves que pertencem a um perfil (usadas para excluir perfil e para backup). Módulos novos registram as suas aqui. */
-Store.KEYS = ['isSound', 'isMusic', 'isShowGhost', 'isVabiration', 'isTouchControl', 'index_bg', 'skin', 'musicVol', 'sfxVol', 'isFx', 'startLevel',
+Store.KEYS = ['isSound', 'isMusic', 'isShowGhost', 'isVabiration', 'isTouchControl', 'index_bg', 'skin', 'musicVol', 'sfxVol', 'isFx', 'oppView', 'startLevel',
   'bestScore', 'bestScore2Minutes', 'bestScoreStrategy', 'bestSprintMs', 'stats', 'history', 'achv', 'rewards', 'daily', 'tut', 'ctl', 'themes', 'zenLevel'];
 Store.register = function (...ks) { ks.forEach((k) => { if (!Store.KEYS.includes(k)) Store.KEYS.push(k); }); };
 const LS = (k) => Store.get(k);

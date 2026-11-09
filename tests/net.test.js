@@ -316,3 +316,82 @@ test('lixo/ataques e níveis diferentes salvos nos aparelhos não divergem (com 
   assert.deepEqual(plain(a.sent), plain(V(P.B).sent)); assert.deepEqual(plain(a.pend), plain(V(P.B).pend));
   assert.equal(a.snapHash(a.snap()), reference(P, a.cfg.seed).hash);
 });
+
+/* ======== Online em tela cheia (cada jogador vê só a sua tela) ======== */
+const FILLC = '#fff';
+function tetrisOn(h, i) { V(h).withBoard(i, () => { const G = h.G(); G.grid[5][0] = FILLC; for (let r = 16; r < 20; r++) for (let c = 0; c < 10; c++) G.grid[r][c] = c === 9 ? null : FILLC; G.active = h.sb.makePiece('I'); Object.assign(G.active, { rot: 1, x: 7, y: 16 }); h.sb.lockPiece(); }); }
+
+test('tela cheia: o online desenha UM tabuleiro (o seu) no layout solo, nunca dois lado a lado', () => {
+  const P = startMatch(pair({ lat: 1 }));
+  for (const [h, me] of [[P.A, 0], [P.B, 1]]) {
+    h.sb.__seen = []; h.run("(function(){ const o = drawBoard; drawBoard = function () { __seen.push(G.vi); return o(); }; })()");
+    const L0 = JSON.stringify(plain(h.get('L'))), cell = h.get('CELL');
+    for (const s of ['COUNT', 'VERSUS', 'PAUSED', 'VSOVER']) { h.setState(s); h.sb.__seen.length = 0; assert.doesNotThrow(() => h.sb.render(), s); assert.deepEqual(plain(h.sb.__seen), [me], `só o tabuleiro ${me} em ${s}`); }
+    assert.equal(JSON.stringify(plain(h.get('L'))), L0); assert.equal(h.get('CELL'), cell, 'layout solo intacto');
+    assert.equal(V(h).cellV, cell); assert.equal(V(h).lay[0], h.get('L'), 'sem layout dividido');
+  }
+});
+test('tela cheia: layout solo em várias telas e a miniatura do oponente cabe na coluna do Hold', () => {
+  for (const [w, hh] of [[360, 640], [411, 890], [320, 568], [768, 1024]]) {
+    const P = pair(); for (const h of [P.A, P.B]) { h.sb.innerWidth = w; h.sb.innerHeight = hh; h.sb.resize(); }
+    startMatch(P); const L = plain(P.A.get('L'));
+    assert.doesNotThrow(() => P.A.sb.render(), `${w}x${hh}`);
+    assert.ok(L.hold.w > 0 && L.hold.x >= -1 && L.hold.x + L.hold.w <= L.fl, `coluna do Hold ${w}x${hh}`);
+    const y0 = L.hold.y + L.hold.h + P.A.get('CELL') * 1.3, h2 = 20 * (L.hold.w / 10); assert.ok(y0 + h2 < L.fb, `miniatura não passa da moldura ${w}x${hh}`);
+  }
+});
+test('tela cheia: efeitos e sons do tabuleiro do oponente não aparecem na sua tela', () => {
+  const P = startMatch(pair({ lat: 0 })); const a = P.A, FX = () => a.get('FX');
+  FX().lock.length = 0; FX().flash.length = 0; FX().parts.length = 0;
+  tetrisOn(a, 1);                                                  // oponente limpa 4 linhas (tabuleiro remoto no aparelho A)
+  assert.equal(FX().lock.length, 0); assert.equal(FX().flash.length, 0); assert.equal(FX().parts.length, 0); assert.equal(a.get('SIM'), false);
+  tetrisOn(a, 0);                                                  // eu limpo: aparecem efeitos, marcados como meus
+  assert.ok(FX().flash.length > 0 && FX().flash.every((f) => f.b === 0));
+});
+test('tela cheia: mensagens de pontuação do jogador local usam o painel normal; as do oponente não', () => {
+  const P = startMatch(pair({ lat: 0 })); const a = P.A;
+  const el = (id) => a.sb.document.getElementById(id); el('msg2').textContent = ''; el('msg').textContent = '';
+  tetrisOn(a, 1); assert.equal(el('msg2').textContent, ''); assert.equal(el('msg').textContent, '', 'oponente não mexe nas minhas mensagens');
+  tetrisOn(a, 0); assert.equal(el('msg').textContent, 'TETRIS'); assert.equal(V(a).B[0].note, null, 'não vira nota de tela dividida');
+});
+test('tela cheia: gestos usam o tamanho de célula solo (arrastar, tocar à esquerda/direita)', () => {
+  const P = startMatch(pair({ lat: 3 })); const a = P.A, C = a.get('CELL'), ui = { closest: () => null };
+  const codes = (from) => P.sent.a.slice(from).map((l) => JSON.parse(l)).filter((m) => m.k === 'in').flatMap((m) => m.e.map((x) => x[1]));
+  let mark = P.sent.a.length;
+  a.now = 0; a.fire('pointerdown', { pointerId: 1, clientX: 200, clientY: 300, target: ui });
+  a.fire('pointermove', { pointerId: 1, clientX: 200 + C * 0.9 + 1, clientY: 300 });
+  assert.deepEqual(codes(mark), [1], 'um passo (0,9 célula solo) = uma coluna');
+  a.now = 400; a.fire('pointerup', { pointerId: 1, clientX: 200 + C * 0.9 + 1, clientY: 300 });
+  mark = P.sent.a.length;
+  a.now = 0; a.fire('pointerdown', { pointerId: 2, clientX: 40, clientY: 400, target: ui }); a.now = 80; a.fire('pointerup', { pointerId: 2, clientX: 40, clientY: 400 });
+  a.now = 0; a.fire('pointerdown', { pointerId: 3, clientX: 380, clientY: 400, target: ui }); a.now = 80; a.fire('pointerup', { pointerId: 3, clientX: 380, clientY: 400 });
+  assert.deepEqual(codes(mark), [3, 2], 'esquerda gira ao contrário, direita gira normal');
+  mark = P.sent.a.length;
+  a.now = 0; a.fire('pointerdown', { pointerId: 4, clientX: 200, clientY: 200, target: ui }); a.now = 100; a.fire('pointerup', { pointerId: 4, clientX: 200, clientY: 200 + C * 3 });
+  assert.ok(codes(mark).includes(4), 'deslizar para baixo derruba');
+});
+test('tela cheia: o cliente (tabuleiro 1) também controla e vê o próprio tabuleiro', () => {
+  const P = startMatch(pair({ lat: 2 })); const b = P.B, v = V(b);
+  assert.equal(v.net.local, 1); const x0 = v.B[1].active.x; assert.equal(v.input(1, 0), true); P.tick(1);
+  assert.equal(v.B[1].active.x, x0 - 1); assert.equal(v.input(0, 0), false);
+});
+test('miniatura do oponente: configurável (padrão ligada), persiste e é desenhada só quando ligada', () => {
+  const P = startMatch(pair({ lat: 0 })); const a = P.A;
+  assert.equal(a.get('settings').oppView, true);
+  const names = []; a.sb.__names = names; a.run("(function(){ const o = txt; txt = function (s) { __names.push(String(s)); return o.apply(null, arguments); }; })()");
+  a.sb.render(); const on = names.filter((s) => s === 'Beto').length; assert.equal(on, 1, 'rótulo da miniatura');
+  a.get('settings').oppView = false; a.sb.saveSettings(); names.length = 0; a.sb.render(); assert.equal(names.filter((s) => s === 'Beto').length, 0);
+  assert.equal(a.store.tetris_oppView, '0'); assert.equal(load(1, a.store).get('settings').oppView, false);
+  assert.ok(a.get('Store').KEYS.includes('oppView'));
+  assert.doesNotThrow(() => { a.sb.openSettingsSheet(); }); assert.ok(a.els.sheetBody.children.some((c) => /Miniatura do oponente/.test(c.textContent || '')));
+});
+test('tela cheia: barra de lixo recebido aparece na margem da sua moldura; fim de partida mostra WIN/K.O. na sua tela', () => {
+  const P = startMatch(pair({ lat: 0 })); const a = P.A; V(a).pend[0] = 4;
+  assert.doesNotThrow(() => a.sb.render());
+  P.tick(1); V(a).B[0].overDone = true; V(a).over = true; V(a).result = { winner: 1, tie: false }; a.setState('VSOVER'); assert.doesNotThrow(() => a.sb.render());
+});
+test('Versus local (IA / 2 jogadores na mesma tela) continua com tela dividida', () => {
+  const h = load(1); V(h).create({ players: [{ kind: 'human', name: 'A' }, { kind: 'ai', name: 'IA', level: 'easy' }], seed: 3 }); V(h).active = true; h.setState('VERSUS');
+  assert.equal(V(h).net, null); V(h).layouts(); assert.notEqual(V(h).lay[0], h.get('L')); assert.ok(V(h).lay[0].bx < V(h).lay[1].bx);
+  h.sb.__seen = []; h.run("(function(){ const o = drawBoard; drawBoard = function () { __seen.push(G.vi); return o(); }; })()"); h.sb.render(); assert.deepEqual(plain(h.sb.__seen), [0, 1]);
+});
