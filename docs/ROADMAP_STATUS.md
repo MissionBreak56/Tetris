@@ -34,3 +34,4 @@
 - A tela LEVEL (engrenagem) virou o menu geral (nível inicial, modos, estatísticas, temas, perfis, backup...).
 - Versus não grava replays; tutorial não grava nada; Zen/diário/personalizado/versus não entram no ranking oficial.
 - Aleatoriedade de jogo usa `G.rng` por partida; `Math.random` ficou só para efeitos visuais.
+- **Animações por tabuleiro (v1.5.2):** `updateFx` só suavizava o `G` global (= tabuleiro 0). No online o cliente (tabuleiro 1) via a peça ativa parada na coluna de nascimento e a 35% de opacidade, a pontuação travada em 0 e sem animação de queda de linhas; o mesmo ocorria no 2º tabuleiro do Versus local. Agora `smoothBoard` roda para todos os tabuleiros em jogo e os campos visuais (`disp`, `rowOff`, `overT`, `note`, `dx`, `age`) ficam fora dos snapshots do rollback.

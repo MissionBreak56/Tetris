@@ -184,10 +184,12 @@ const Versus = {
 /* ---- online: previsão com correção (rollback) ----
    Cada aparelho simula os DOIS tabuleiros e aplica suas próprias ações na hora. Ações do oponente que chegam atrasadas (tick já simulado)
    fazem o jogo voltar ao snapshot daquele tick e re-simular até o presente. Fim de partida só vale quando confirmado (todas as ações anteriores conhecidas). */
+const VISUAL_ONLY = ['note', 'disp', 'rowOff', 'overT'];            // animações: não fazem parte da simulação nem do snapshot
+const NOT_STATE = ['rng', 'opts', 'rules', 'ai'].concat(VISUAL_ONLY);
 function cloneBoard(g) {
   const o = {};
   for (const k in g) {
-    if (k === 'rng' || k === 'note' || k === 'opts' || k === 'rules' || k === 'ai') continue;
+    if (NOT_STATE.includes(k)) continue;
     const v = g[k];
     o[k] = Array.isArray(v) ? (k === 'grid' ? v.map((r) => r.slice()) : v.slice()) : (v && typeof v === 'object' ? Object.assign({}, v) : v);
   }
@@ -198,7 +200,7 @@ function restoreBoard(g, s) {
     if (k === '__rng') { g.rng.set(s.__rng); continue; }
     const v = s[k]; g[k] = Array.isArray(v) ? (k === 'grid' ? v.map((r) => r.slice()) : v.slice()) : (v && typeof v === 'object' ? Object.assign({}, v) : v);
   }
-  for (const k of Object.keys(g)) if (!(k in s) && !['rng', 'note', 'opts', 'rules', 'ai'].includes(k)) delete g[k];
+  for (const k of Object.keys(g)) if (!(k in s) && !NOT_STATE.includes(k)) delete g[k];
 }
 Versus.snap = function () { return { B: this.B.map(cloneBoard), pend: this.pend.slice(), sent: this.sent.slice(), vr: this.rng.get() }; };
 Versus.unsnap = function (s, tick) {
@@ -226,9 +228,12 @@ Versus.netRollback = function () {
   const snap = n.snaps[rt]; if (!snap) return this.netAbort('Fora de sincronia (janela de correção excedida)');
   const target = this.ticks, fx = { parts: FX.parts, flash: FX.flash, lock: FX.lock, trail: FX.trail, shake: FX.shake, pulse: FX.pulse }, sim = SIM;
   if (n.endTick != null && n.endTick > rt) n.endTick = null;
+  const vis = this.B.map((g) => g.active && { t: g.active.t, dx: g.active.dx, age: g.active.age });     // suavização visual da peça ativa
   this.unsnap(snap, rt); SIM = true; FX.parts = []; FX.flash = []; FX.lock = []; FX.trail = null;
   try { while (this.ticks < target) this.netTick(); }
-  finally { SIM = sim; FX.parts = fx.parts; FX.flash = fx.flash; FX.lock = fx.lock; FX.trail = fx.trail; FX.shake = fx.shake; FX.pulse = fx.pulse; }
+  finally {
+    this.B.forEach((g, i) => { if (g.active && vis[i] && vis[i].t === g.active.t) { g.active.dx = vis[i].dx; g.active.age = vis[i].age; } });   // sem "pulos" a cada correção
+    SIM = sim; FX.parts = fx.parts; FX.flash = fx.flash; FX.lock = fx.lock; FX.trail = fx.trail; FX.shake = fx.shake; FX.pulse = fx.pulse; }
 };
 /** Checagens sobre o estado CONFIRMADO: hash de sincronia periódico e fim de partida. */
 Versus.netCheck = function () {

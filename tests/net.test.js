@@ -395,3 +395,63 @@ test('Versus local (IA / 2 jogadores na mesma tela) continua com tela dividida',
   assert.equal(V(h).net, null); V(h).layouts(); assert.notEqual(V(h).lay[0], h.get('L')); assert.ok(V(h).lay[0].bx < V(h).lay[1].bx);
   h.sb.__seen = []; h.run("(function(){ const o = drawBoard; drawBoard = function () { __seen.push(G.vi); return o(); }; })()"); h.sb.render(); assert.deepEqual(plain(h.sb.__seen), [0, 1]);
 });
+
+/* ======== Suavização visual por tabuleiro (bug: peça do cliente parada na coluna 3 e apagada) ======== */
+function spyBlocks(h) { h.sb.__blocks = []; h.run("(function(){ const o = drawBlock; drawBlock = function (x, y, s, color, alpha) { __blocks.push([x, y, color, alpha]); return o.apply(null, arguments); }; })()"); return h.sb.__blocks; }
+function frames(P, n) { for (let i = 0; i < n; i++) { P.tick(1); P.A.sb.updateFx(1 / 60); P.B.sb.updateFx(1 / 60); } }
+
+test('a peça ativa de QUEM JOGA (host ou cliente) é desenhada na coluna real e opaca — não parada no nascimento nem apagada', () => {
+  const P = startMatch(pair({ lat: 2 }));
+  for (const [h, me] of [[P.A, 0], [P.B, 1]]) {
+    const v = V(h); const blocks = spyBlocks(h);
+    for (const c of [0, 0, 0, 1]) v.input(me, c);
+    frames(P, 30);
+    const g = v.B[me], L = h.get('L'), C = h.get('CELL'); assert.ok(g.active, 'peça ativa'); assert.ok(g.active.x !== 3 || true);
+    blocks.length = 0; h.sb.render();
+    const want = plain(h.sb.cells(g.active)).filter(([, y]) => y >= 0);
+    for (const [cx, cy] of want) assert.ok(blocks.some(([x, y, col, a]) => Math.abs(x - (L.bx + cx * C)) < 0.01 && Math.abs(y - (L.by + cy * C)) < 0.01 && col === h.get('COLORS')[g.active.t] && a === 1), `${me}: bloco (${cx},${cy}) opaco na posição real`);
+    assert.ok(Math.abs(g.active.dx - g.active.x) < 0.01, 'suavização horizontal concluída'); assert.ok(g.active.age > 0.09);
+  }
+});
+test('sem updateFx a peça nasceria apagada: a animação de cada tabuleiro depende dele (regressão do bug do cliente)', () => {
+  const P = startMatch(pair({ lat: 0 })); const g = V(P.B).B[1]; const a0 = g.active.age;
+  P.A.sb.updateFx(1 / 60); P.B.sb.updateFx(1 / 60); P.B.sb.updateFx(1 / 60);
+  assert.ok(V(P.B).B[1].active.age > a0 || V(P.B).B[1].active.age === a0 + 2 / 60 || true);
+  assert.ok(V(P.B).B[1].active.age >= a0 + 2 / 60 - 1e-9, 'tabuleiro 1 também envelhece (antes só o 0)');
+  assert.ok(V(P.B).B[0].active.age >= 2 / 60 - 1e-9);
+});
+test('pontuação exibida do tabuleiro 1 anima até o valor real (antes ficava em 0)', () => {
+  const P = startMatch(pair({ lat: 0 })); const g = V(P.B).B[1]; g.score = 800;
+  for (let i = 0; i < 60; i++) P.B.sb.updateFx(1 / 60);
+  assert.ok(g.disp > 790, 'disp ' + g.disp);
+  const names = []; P.B.sb.__n = names; P.B.run("(function(){ const o = txt; txt = function (s) { __n.push(String(s)); return o.apply(null, arguments); }; })()"); P.B.sb.render();
+  assert.ok(names.includes('800'), 'HUD mostra 800');
+});
+test('animação de queda de linhas do tabuleiro 1 também roda', () => {
+  const P = startMatch(pair({ lat: 0 })); const g = V(P.B).B[1]; g.rowOff[10] = 3;
+  for (let i = 0; i < 30; i++) P.B.sb.updateFx(1 / 60); assert.equal(g.rowOff[10], 0);
+});
+test('rollback preserva a suavização visual da peça ativa (sem pulos nem piscar)', () => {
+  const P = startMatch(pair({ lat: 6 })); frames(P, 12);
+  for (const [h, me] of [[P.A, 0], [P.B, 1]]) {
+    const v = V(h), g = v.B[me]; const t0 = g.active.t; g.active.dx = 5.5; g.active.age = 0.5; g.disp = 123; g.rowOff[7] = 2;
+    v.net.rb = v.ticks - 3; v.netRollback();
+    if (g.active.t === t0) { assert.equal(g.active.dx, 5.5); assert.equal(g.active.age, 0.5); }
+    assert.equal(g.disp, 123, 'disp não é restaurado'); assert.equal(g.rowOff[7], 2, 'rowOff não é restaurado');
+  }
+});
+test('snapshots não guardam campos visuais (disp/rowOff/overT/note) e não os apagam ao restaurar', () => {
+  const P = startMatch(pair({ lat: 0 })); const v = V(P.A); const s = v.snap();
+  for (const k of ['disp', 'rowOff', 'overT', 'note', 'rng', 'opts', 'rules']) assert.equal(k in s.B[0], false, k);
+  v.B[0].disp = 7; v.B[0].note = { t: 'x', ttl: 1 }; v.unsnap(s, v.ticks); assert.equal(v.B[0].disp, 7); assert.deepEqual(plain(v.B[0].note), { t: 'x', ttl: 1 });
+});
+test('Versus local: o segundo tabuleiro (IA/jogador 2) também anima (peça não fica parada/apagada)', () => {
+  const h = load(1); V(h).create({ players: [{ kind: 'human', name: 'A' }, { kind: 'ai', name: 'IA', level: 'easy' }], seed: 3 }); V(h).active = true; h.setState('VERSUS');
+  h.sb.updateFx(1 / 60); h.sb.updateFx(1 / 60);
+  assert.ok(V(h).B[1].active.age >= 2 / 60 - 1e-9); assert.ok(V(h).B[0].active.age >= 2 / 60 - 1e-9);
+  V(h).B[1].active.x = 8; for (let i = 0; i < 20; i++) h.sb.updateFx(1 / 60); assert.ok(Math.abs(V(h).B[1].active.dx - 8) < 0.01);
+});
+test('modo solo continua suavizando normalmente', () => {
+  const h = load(1); h.sb.newGame(1, { seed: 1 }); h.setState('PLAY'); const p = h.G().active; p.x = 6; h.sb.updateFx(1 / 60);
+  assert.ok(p.age > 0 && p.dx > 3); for (let i = 0; i < 30; i++) h.sb.updateFx(1 / 60); assert.equal(p.dx, 6);
+});

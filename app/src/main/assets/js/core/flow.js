@@ -108,11 +108,13 @@ function updateFx(dt){
   FX.pulse=Math.max(0,FX.pulse-dt*1.3);
   BG.stars.forEach(s=>{ s.y-=s.v*dt; if(s.y<-.02){ s.y=1.02; s.x=Math.random(); } });
   BG.fall.forEach(f=>{ f.y+=f.v*dt; f.r+=f.rs*dt; if(f.y>1.15){ f.y=-.2; f.x=Math.random(); f.t=pickT(); } });
-  if(G){
-    G.disp+=(G.score-G.disp)*Math.min(1,dt*9); if(Math.abs(G.score-G.disp)<1) G.disp=G.score;
-    for(let r=0;r<ROWS;r++){ if(G.rowOff[r]){ G.rowOff[r]-=G.rowOff[r]*Math.min(1,dt*16); if(Math.abs(G.rowOff[r])<.02) G.rowOff[r]=0; } }
-    if(G.active){ const p=G.active; p.age+=dt; p.dx+=(p.x-p.dx)*Math.min(1,dt*30); if(Math.abs(p.x-p.dx)<.01) p.dx=p.x; }
-    if(state==='OVER') G.overT+=dt;
-  }
+  // suavização visual de CADA tabuleiro em jogo (no Versus são dois; antes só o G global — o tabuleiro 1 ficava com a peça parada/apagada)
+  (Versus.active ? Versus.B : (G ? [G] : [])).forEach((g)=>smoothBoard(g,dt));
+}
+function smoothBoard(g,dt){
+  g.disp+=(g.score-g.disp)*Math.min(1,dt*9); if(Math.abs(g.score-g.disp)<1) g.disp=g.score;
+  for(let r=0;r<ROWS;r++){ if(g.rowOff[r]){ g.rowOff[r]-=g.rowOff[r]*Math.min(1,dt*16); if(Math.abs(g.rowOff[r])<.02) g.rowOff[r]=0; } }
+  if(g.active){ const p=g.active; p.age+=dt; p.dx+=(p.x-p.dx)*Math.min(1,dt*30); if(Math.abs(p.x-p.dx)<.01) p.dx=p.x; }
+  if(state==='OVER'&&g===G) g.overT+=dt;
 }
 const pickT=()=>'IJLOSTZ'[(Math.random()*7)|0];
