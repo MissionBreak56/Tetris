@@ -14,6 +14,7 @@ const THEMES=[
 const TH=()=>Theme.arr();
 function applyTheme(){ Theme.invalidate(); Theme.applyPieces(); const t=TH(), u=Theme.ui(), st=document.documentElement.style, rgb=(h)=>hexRgb(h).join(',');
   st.setProperty('--acc',t[2]); st.setProperty('--glow',t[3]); st.setProperty('--dk',t[4]);
+  st.setProperty('--bg1',t[0]); st.setProperty('--bg2',t[1]); st.setProperty('--ov',rgb(mixHex(t[1],'#000000',.2)));   // fundo da página e película das janelas seguem o tema (nada de azul fixo)
   st.setProperty('--btnbg',rgb(u.btnSmall)); st.setProperty('--b1',u.btn1); st.setProperty('--b2',u.btn2);
   st.setProperty('--p1',rgb(u.panel1)); st.setProperty('--p2',rgb(u.panel2));                       // janelas/painéis
   st.setProperty('--ink',u.ink); st.setProperty('--dim',u.dim); st.setProperty('--val',u.val); }  // textos e valores

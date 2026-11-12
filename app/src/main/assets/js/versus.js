@@ -2,7 +2,7 @@
 /* Versus: dois tabuleiros na mesma tela (humano×IA ou humano×humano). Reaproveita o motor trocando o tabuleiro ativo (withBoard).
    Lixo/ataque: 2 linhas=1, 3=2, Tetris=4, T-Spin 1/2/3=2/4/6, +1 B2B, bônus de combo, Perfect Clear=10. Ataques cancelam lixo recebido. */
 const COMBO_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
-const GARBAGE_COLOR = '#6b7390';
+const GARBAGE_COLOR = '#707070';
 const Versus = {
   PRED_MAX: 30, SNAP_WIN: 40,
   active: false, net: null, cfg: null, B: [], pend: [0, 0], sent: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,

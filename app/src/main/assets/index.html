@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Tetris</title>
 <style>
-  :root{--acc:#6aa3ff;--glow:61,120,255;--dk:18,40,170;--btnbg:8,16,70;--b1:#2f58e6;--b2:#1a2f9e;--cell:40px;--p1:12,20,86;--p2:5,10,53;--ink:#ffffff;--dim:#9fb4ee;--val:#ffd54a}
+  :root{--acc:#6aa3ff;--glow:61,120,255;--dk:18,40,170;--btnbg:8,16,70;--b1:#2f58e6;--b2:#1a2f9e;--bg1:#2433b8;--bg2:#04051f;--ov:3,5,35;--cell:40px;--p1:12,20,86;--p2:5,10,53;--ink:#ffffff;--dim:#9fb4ee;--val:#ffd54a}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
-  html,body{margin:0;height:100%;background:#05072a;color:var(--ink);
+  html,body{margin:0;height:100%;background:var(--bg2);color:var(--ink);
     font-family:'Segoe UI',Roboto,Arial,sans-serif;overflow:hidden;
     user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
   #cv{position:fixed;inset:0;width:100%;height:100%;display:block}
   .sheetp canvas{position:static;width:100%;height:auto;max-width:100%}
   .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
-    background:rgba(3,5,35,.78);z-index:20;touch-action:manipulation}
+    background:rgba(var(--ov),.78);z-index:20;touch-action:manipulation}
   .overlay.on{display:flex}
   .overlay.on .panel{animation:popin .28s cubic-bezier(.2,1.4,.4,1)}
   @keyframes popin{from{transform:scale(.75);opacity:0}to{transform:scale(1);opacity:1}}
@@ -68,15 +68,15 @@
   .slrow input{width:100%;accent-color:var(--acc)}.slrow b{color:var(--val);text-align:right;font-size:13px}
   .achv{margin:8px 0;opacity:.6}.achv.done{opacity:1}.achv .kv{border:0;padding:2px 0}
   .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
-  #msg2{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-size:20px;font-weight:800;letter-spacing:2px;white-space:nowrap;opacity:0;pointer-events:none;z-index:15;color:#9bf0ff;text-shadow:0 0 10px #2fb8ff,0 2px 8px #000}
+  #msg2{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-size:20px;font-weight:800;letter-spacing:2px;white-space:nowrap;opacity:0;pointer-events:none;z-index:15;color:var(--ink);text-shadow:0 0 10px var(--acc),0 2px 8px #000}
   #msg2.pop{animation:msg2pop 1.3s ease-out forwards}
   #msg2.m-perfect{color:#fff3b0;font-size:26px;text-shadow:0 0 14px #ffc400,0 0 28px #ff8a00}
   @keyframes msg2pop{0%{opacity:0;transform:translate(-50%,-30%) scale(.5)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}30%{transform:translate(-50%,-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-70%) scale(1)}}
   #msg.m-tetris{color:#ffe066;font-size:36px;text-shadow:0 0 16px #ff9d00,0 0 30px #ff5e00,0 3px 12px #000}
   #msg.m-tspin{color:#e0a8ff;text-shadow:0 0 14px #b44bff,0 3px 12px #000}
   #msg.m-b2b{color:#ffb35c;text-shadow:0 0 14px #ff6a00,0 3px 12px #000}
-  #msg.m-lines{color:#fff;text-shadow:0 0 10px #6aa3ff,0 3px 12px #000}
-  #msg.m-level{color:#9bf0ff;text-shadow:0 0 12px #2fb8ff,0 3px 12px #000}
+  #msg.m-lines{color:var(--ink);text-shadow:0 0 10px var(--acc),0 3px 12px #000}
+  #msg.m-level{color:var(--ink);text-shadow:0 0 12px var(--acc),0 3px 12px #000}
   #msg.m-skill{color:#b8ffd0;text-shadow:0 0 12px #2fff88,0 3px 12px #000}
   #tut{display:none;position:fixed;left:3%;right:3%;bottom:1.5%;z-index:12;padding:10px 12px;border-radius:14px;background:rgba(var(--btnbg),.94);border:2px solid var(--acc);box-shadow:0 0 14px rgba(var(--glow),.6);font-size:14px;line-height:1.35}
   #tut .tp{float:right;color:var(--val);font-weight:700;margin-left:8px}#tut .btn{width:auto;margin:6px 6px 0 0;padding:6px 14px;font-size:13px}
@@ -113,7 +113,7 @@
   .mb.off .slash{display:block}
   .badge{display:none;position:absolute;right:calc(var(--cell)*-.18);top:calc(var(--cell)*-.18);min-width:calc(var(--cell)*.8);
     height:calc(var(--cell)*.8);padding:0 calc(var(--cell)*.15);align-items:center;justify-content:center;border-radius:calc(var(--cell)*.4);
-    background:var(--acc);color:#001040;font-size:calc(var(--cell)*.46);font-weight:800}
+    background:var(--acc);color:rgb(var(--ov));font-size:calc(var(--cell)*.46);font-weight:800}
   .badge.on{display:flex}
 </style>
 </head>

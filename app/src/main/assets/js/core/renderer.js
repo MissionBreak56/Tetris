@@ -73,6 +73,8 @@ function layer(name,key,w,h,paint){
   }
   return l.cv;
 }
+let _sc={k:'',v:'#ffffff'};
+function starColor(T){ if(_sc.k!==T[2]){ _sc={k:T[2],v:mixHex(T[2],'#ffffff',.8)}; } return _sc.v; }   // estrela = destaque do tema quase branco
 function drawBackground(){
   const T=TH();
   const bg=layer('bg',[W,H,dpr,T[0],T[1],T[3]].join('|'),W,H,(c)=>{
@@ -90,7 +92,7 @@ function drawBackground(){
   // estrelas: 4 níveis de brilho, um único caminho/preenchimento por nível
   const lv=[[],[],[],[]];
   BG.stars.forEach(s=>{ const a=s.a*(.6+.4*Math.sin(FX.t*2+s.x*20)); lv[Math.min(3,(a*5.5)|0)].push(s); });
-  ctx.fillStyle='#cfe0ff';
+  ctx.fillStyle=starColor(T);
   lv.forEach((arr,i)=>{ if(!arr.length) return; ctx.globalAlpha=(i+.5)/5.5; ctx.beginPath(); arr.forEach(s=>{ const x=s.x*W,y=s.y*H; ctx.moveTo(x+s.r,y); ctx.arc(x,y,s.r,0,6.3); }); ctx.fill(); });
   ctx.globalAlpha=1;
 }
@@ -122,14 +124,14 @@ function drawLogo(){
   const sx=L.bx+3.55*C, sw=2.9*C, sy=y+h, sh=2.8*C, lw=Math.max(2,C*.05);
   ctx.save();
   // haste do T
-  let g=ctx.createLinearGradient(0,sy,0,sy+sh); g.addColorStop(0,'#050b3a'); g.addColorStop(1,'rgba('+T[3]+',.65)');
+  let g=ctx.createLinearGradient(0,sy,0,sy+sh); g.addColorStop(0,mixHex(T[0],'#000000',.8)); g.addColorStop(1,'rgba('+T[3]+',.65)');
   ctx.fillStyle=g; ctx.fillRect(sx,sy,sw,sh);
   g=ctx.createLinearGradient(0,sy,0,sy+sh); g.addColorStop(0,'rgba('+T[3]+',0)'); g.addColorStop(1,'rgba('+T[3]+',.5)');
   ctx.fillStyle=g; poly([sx+.3*C,sy,sx+sw-.3*C,sy,sx+sw-.7*C,sy+sh-.15*C,sx+.7*C,sy+sh-.15*C]);
   ctx.strokeStyle=gold; ctx.lineWidth=lw; ctx.beginPath();
   ctx.moveTo(sx,sy); ctx.lineTo(sx,sy+sh); ctx.lineTo(sx+sw,sy+sh); ctx.lineTo(sx+sw,sy); ctx.stroke();
   // caixa do logo
-  g=ctx.createLinearGradient(0,y,0,y+h); g.addColorStop(0,'#0a1550'); g.addColorStop(1,'#030828');
+  g=ctx.createLinearGradient(0,y,0,y+h); g.addColorStop(0,mixHex(T[0],'#000000',.72)); g.addColorStop(1,mixHex(T[1],'#000000',.35));
   ctx.shadowColor='rgba(217,173,79,'+(.35+.15*Math.sin(FX.t*2.4))+')'; ctx.shadowBlur=C*.5;
   ctx.fillStyle=g; ctx.fillRect(x,y,w,h); ctx.shadowBlur=0;
   ctx.fillStyle=g; ctx.fillRect(sx+lw,y+h-lw,sw-2*lw,lw*2);
@@ -164,7 +166,7 @@ function drawHUD(){
   txt('LINES '+G.lines,L.fr+CELL*1.05,y,sz,Theme.ui().ink,'right');
   const pop=1+Math.min(.25,Math.abs(G.score-G.disp)/400);
   ctx.save(); ctx.translate(W/2,y); ctx.scale(pop,pop);
-  ctx.shadowColor='#4f8bff'; ctx.shadowBlur=CELL*0.3;
+  ctx.shadowColor='rgb('+TH()[3]+')'; ctx.shadowBlur=CELL*0.3;
   txt(String(Math.round(G.disp)),0,0,CELL*1.15,Theme.ui().ink,'center','500'); ctx.restore();
   if(G.rules.timeLimit) txt('TIME '+G.timeLeft,W/2,y+CELL*0.95,CELL*0.5,G.timeLeft<=10?'#ff6a6a':Theme.ui().dim,'center','600');
   else if(G.rules.goal) txt(fmtMsP(G.ms)+'  ·  '+(G.rules.goal.type==='lines'?G.lines+'/'+G.rules.goal.target+' linhas':fmtNum(G.score)+'/'+fmtNum(G.rules.goal.target)),W/2,y+CELL*0.95,CELL*0.5,Theme.ui().dim,'center','600');
@@ -187,7 +189,7 @@ function drawBoard(){
   // peças fixas
   for(let r=0;r<ROWS;r++){ const yy=L.by+(r-G.rowOff[r])*CELL;
     for(let c=0;c<COLS;c++){ const col=G.grid[r][c]; if(!col) continue;
-      drawBlock(L.bx+c*CELL,yy,CELL,(state==='OVER'&&(ROWS-1-r)<gray)?'#5a6080':col); } }
+      drawBlock(L.bx+c*CELL,yy,CELL,(state==='OVER'&&(ROWS-1-r)<gray)?'#666666':col); } }
   // bloco pergunta
   if(G.qBlock&&G.grid[G.qBlock.r]&&G.grid[G.qBlock.r][G.qBlock.c]){
     const qx=L.bx+G.qBlock.c*CELL, qy=L.by+(G.qBlock.r-G.rowOff[G.qBlock.r])*CELL;

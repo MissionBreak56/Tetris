@@ -110,3 +110,40 @@ test('CSS: painéis, botões e textos usam variáveis do tema (sem cores fixas)'
   assert.doesNotMatch(html, /#0c1456ee|#050a35ee/, 'fundo azul fixo do painel removido');
   for (const v of ['--p1:', '--p2:', '--ink:', '--dim:', '--val:']) assert.ok(html.includes(v), v);
 });
+
+// ---- Fora da interface (fundo da página, película das janelas, estrelas) não pode ficar azul fixo ----
+const isBlueish = (r, g, b) => b >= r + 25 && b >= g + 10;
+const rootDir = path.join(__dirname, '..', 'app', 'src', 'main', 'assets');
+test('fundo da página e película das janelas usam variáveis do tema (sem azul-marinho fixo)', () => {
+  const html = fs.readFileSync(path.join(rootDir, 'index.html'), 'utf8');
+  assert.match(html, /html,body\{[^}]*background:var\(--bg2\)/, 'body segue o tema');
+  assert.match(html, /\.overlay\{[^}]*background:rgba\(var\(--ov\),\.78\)/, 'película das janelas segue o tema');
+  assert.doesNotMatch(html, /rgba\(3,5,35/, 'sem a película azul fixa');
+  assert.doesNotMatch(html, /background:#05072a/, 'sem o fundo azul fixo');
+});
+test('applyTheme: --bg1/--bg2/--ov acompanham o tema; tema cinza gera película cinza, não azul', () => {
+  const h = load(1);
+  for (let i = 0; i < 4; i++) {
+    h.get('settings').theme = i; h.sb.applyTheme(); const t = plain(h.get('THEMES'))[i];
+    assert.equal(h.css['--bg1'], t[0]); assert.equal(h.css['--bg2'], t[1]); assert.ok(/^\d+,\d+,\d+$/.test(h.css['--ov']), 'ov = r,g,b');
+  }
+  const gray = Object.assign(mk(h), { name: 'Cinza', bg1: '#3a3a3a', bg2: '#0c0c0c', acc: '#bdbdbd', grid: '#8a8a8a', ghost: '#9a9a9a',
+    panel1: '#161616', panel2: '#080808', btn1: '#2c2c2c', btn2: '#161616', btnSmall: '#0b0b0b', dim: '#bdbdbd' });
+  const r = plain(T(h).save(gray)); assert.equal(r.ok, true, JSON.stringify(r.errors));
+  h.get('settings').theme = r.id; h.sb.applyTheme();
+  const [R, G, B] = h.css['--ov'].split(',').map(Number);
+  assert.ok(!isBlueish(R, G, B), 'película neutra no tema cinza: ' + h.css['--ov']);
+  assert.equal(h.css['--bg2'], '#0c0c0c');
+});
+test('renderer/versus/janela nativa não têm azul fixo de "cromo" (estrelas, brilho do placar, logo, cinza do game over, lixo)', () => {
+  const rd = fs.readFileSync(path.join(rootDir, 'js', 'core', 'renderer.js'), 'utf8');
+  for (const c of ['#cfe0ff', '#4f8bff', '#050b3a', '#0a1550', '#030828', '#5a6080']) assert.ok(!rd.includes(c), 'renderer ainda usa ' + c);
+  assert.doesNotMatch(fs.readFileSync(path.join(rootDir, 'js', 'versus.js'), 'utf8'), /#6b7390/);
+  const j = fs.readFileSync(path.join(rootDir, '..', 'java', 'com', 'missionbreak56', 'tetris', 'MainActivity.java'), 'utf8');
+  assert.doesNotMatch(j, /#0b0e17/);
+});
+test('cor das estrelas deriva do destaque do tema (cinza → estrela cinza-clara, não azulada)', () => {
+  const h = load(1); const mix = h.get('mixHex');
+  const star = mix('#bdbdbd', '#ffffff', .8); const n = parseInt(star.slice(1), 16);
+  assert.ok(!isBlueish(n >> 16, (n >> 8) & 255, n & 255), star);
+});
