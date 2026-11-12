@@ -154,26 +154,26 @@ function drawReplayHud(){ const c=Replay.cur; if(!c) return; txt((c.done?'FIM DO
 function drawMenuHud(){
   const y=L.hudY, T=TH();
   ctx.save(); ctx.shadowColor='rgb('+T[3]+')'; ctx.shadowBlur=CELL*0.4;
-  txt('SCORE',W/2,y,CELL*1.15,'#fff','center','500'); ctx.restore();
+  txt('SCORE',W/2,y,CELL*1.15,Theme.ui().ink,'center','500'); ctx.restore();
   txt('BEST '+(+(LS('bestScore')||0)),W/2,y+CELL*0.95,CELL*0.5,T[2],'center','600');
   txt(Profile.cur().name,W/2,y+CELL*1.55,CELL*0.4,'rgba(255,255,255,.55)','center','500');
 }
 function drawHUD(){
   const sz=CELL*0.62, y=L.hudY;
-  txt('LEVEL '+G.level,L.fl-CELL*1.05,y,sz,'#fff','left');
-  txt('LINES '+G.lines,L.fr+CELL*1.05,y,sz,'#fff','right');
+  txt('LEVEL '+G.level,L.fl-CELL*1.05,y,sz,Theme.ui().ink,'left');
+  txt('LINES '+G.lines,L.fr+CELL*1.05,y,sz,Theme.ui().ink,'right');
   const pop=1+Math.min(.25,Math.abs(G.score-G.disp)/400);
   ctx.save(); ctx.translate(W/2,y); ctx.scale(pop,pop);
   ctx.shadowColor='#4f8bff'; ctx.shadowBlur=CELL*0.3;
-  txt(String(Math.round(G.disp)),0,0,CELL*1.15,'#fff','center','500'); ctx.restore();
-  if(G.rules.timeLimit) txt('TIME '+G.timeLeft,W/2,y+CELL*0.95,CELL*0.5,G.timeLeft<=10?'#ff6a6a':'#a9c6ff','center','600');
-  else if(G.rules.goal) txt(fmtMsP(G.ms)+'  ·  '+(G.rules.goal.type==='lines'?G.lines+'/'+G.rules.goal.target+' linhas':fmtNum(G.score)+'/'+fmtNum(G.rules.goal.target)),W/2,y+CELL*0.95,CELL*0.5,'#a9c6ff','center','600');
-  else if(G.mode===4) txt('ZEN',W/2,y+CELL*0.95,CELL*0.5,'#a9c6ff','center','600');
+  txt(String(Math.round(G.disp)),0,0,CELL*1.15,Theme.ui().ink,'center','500'); ctx.restore();
+  if(G.rules.timeLimit) txt('TIME '+G.timeLeft,W/2,y+CELL*0.95,CELL*0.5,G.timeLeft<=10?'#ff6a6a':Theme.ui().dim,'center','600');
+  else if(G.rules.goal) txt(fmtMsP(G.ms)+'  ·  '+(G.rules.goal.type==='lines'?G.lines+'/'+G.rules.goal.target+' linhas':fmtNum(G.score)+'/'+fmtNum(G.rules.goal.target)),W/2,y+CELL*0.95,CELL*0.5,Theme.ui().dim,'center','600');
+  else if(G.mode===4) txt('ZEN',W/2,y+CELL*0.95,CELL*0.5,Theme.ui().dim,'center','600');
   if(G.rules.skills) txt('x'+G.mult.toFixed(1)+'  ·  ?'+(G.qBlock?'':' '+G.qCounter+'/'+G.qThreshold),W/2,y+CELL*0.95,CELL*0.5,'#ffd54a','center','600');
-  txt('Hold',L.hold.x+CELL*0.25,L.hold.y-CELL*0.5,CELL*0.55,'#fff','left');
+  txt('Hold',L.hold.x+CELL*0.25,L.hold.y-CELL*0.5,CELL*0.55,Theme.ui().ink,'left');
   neonBox(L.hold.x,L.hold.y,L.hold.w,L.hold.h);
   if(G.held) drawMini(G.held,L.hold.x,L.hold.y,L.hold.w,L.hold.h,G.canHold?1:.4);
-  txt('Next',L.next.x+CELL*0.3,L.next.y-CELL*0.5,CELL*0.55,'#fff','left');
+  txt('Next',L.next.x+CELL*0.3,L.next.y-CELL*0.5,CELL*0.55,Theme.ui().ink,'left');
   neonBox(L.next.x,L.next.y,L.next.w,L.next.h);
   const sh=L.next.h/3;
   G.queue.slice(0,3).forEach((t,i)=>drawMini(t,L.next.x,L.next.y+i*sh,L.next.w,sh,1));

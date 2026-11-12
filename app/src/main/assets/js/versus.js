@@ -162,9 +162,9 @@ const Versus = {
   },
   hud(i) {
     const g = G, C = CELL, cx = L.bx + L.bw / 2, T = TH();
-    txt(g.name || ('J' + (i + 1)), cx, L.hudY + C * 0.5, C * 1.0, '#fff', 'center', '700');
+    txt(g.name || ('J' + (i + 1)), cx, L.hudY + C * 0.5, C * 1.0, Theme.ui().ink, 'center', '700');
     txt(fmtNum(g.score), cx, L.hudY + C * 1.6, C * 0.8, T[2], 'center', '600');
-    ctx.globalAlpha = 0.8; txt('HOLD', L.bx, L.hudY + C * 2.35, C * 0.5, '#a9c6ff', 'left', '600'); txt('NEXT', L.bx + L.bw, L.hudY + C * 2.35, C * 0.5, '#a9c6ff', 'right', '600'); ctx.globalAlpha = 1;
+    ctx.globalAlpha = 0.8; txt('HOLD', L.bx, L.hudY + C * 2.35, C * 0.5, Theme.ui().dim, 'left', '600'); txt('NEXT', L.bx + L.bw, L.hudY + C * 2.35, C * 0.5, Theme.ui().dim, 'right', '600'); ctx.globalAlpha = 1;
     this.mini(g.held, L.bx + C * 3.0, L.hudY + C * 2.3, C * 0.5); this.mini(g.queue[0], L.bx + L.bw - C * 3.0, L.hudY + C * 2.3, C * 0.5);
     const pe = this.pend[i];
     if (pe > 0) { ctx.fillStyle = '#ff4d4d'; ctx.fillRect(L.fl - C * 0.35, L.fb - Math.min(pe, ROWS) * C, C * 0.25, Math.min(pe, ROWS) * C); }
@@ -302,7 +302,7 @@ Versus.netHud = function (g, op, me) {
   if (pe > 0) { const hh = Math.min(pe, ROWS) * C; ctx.fillStyle = '#ff4d4d'; ctx.fillRect(L.bx - L.pad * 0.42, L.by + L.bh - hh, L.pad * 0.3, hh); }
   if (settings.oppView) {                                             // miniatura do oponente (coluna esquerda, abaixo do Hold)
     const w = L.hold.w, cs = w / COLS, x0 = L.hold.x, y0 = L.hold.y + L.hold.h + C * 1.3, hh = ROWS * cs;
-    txt(nm.slice(0, 8), x0 + w / 2, y0 - C * 0.45, C * 0.4, '#a9c6ff', 'center', '600');
+    txt(nm.slice(0, 8), x0 + w / 2, y0 - C * 0.45, C * 0.4, Theme.ui().dim, 'center', '600');
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(x0, y0, w, hh);
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const col = op.grid[r][c]; if (col) { ctx.fillStyle = col; ctx.fillRect(x0 + c * cs, y0 + r * cs, Math.max(1, cs - 0.6), Math.max(1, cs - 0.6)); } }
     if (op.active && !op.overDone) { ctx.globalAlpha = 0.85; ctx.fillStyle = COLORS[op.active.t]; cells(op.active).forEach(([cx, cy]) => { if (cy >= 0) ctx.fillRect(x0 + cx * cs, y0 + cy * cs, Math.max(1, cs - 0.6), Math.max(1, cs - 0.6)); }); ctx.globalAlpha = 1; }

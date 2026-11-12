@@ -9,7 +9,7 @@ Tetris para Android feito do zero, sem anúncios e sem rede, inspirado nas regra
 - Tutorial interativo, estatísticas e análises (PPS/APM), histórico, ranking local, conquistas, missões e recompensas
 - **Online em rede local** (Wi-Fi/hotspot ou VPN): crie ou procure uma sala e jogue Versus contra outra pessoa em outro aparelho, cada um com a sua tela cheia e latência de comando ≈ 0 (`docs/ONLINE.md`)
 - **Perfis locais** com dados isolados, **replays** determinísticos (exportar/importar com verificação), **backup/restauração** transacional
-- 4 temas + **editor de temas** (validação de contraste), 4 skins de peças, controles e áudio personalizáveis
+- 4 temas + **editor de temas** que personaliza tudo: tabuleiro, peças e a **interface** (janelas, botões e textos), com validação de contraste, 4 skins de peças, controles e áudio personalizáveis
 - Sons e música sintetizados (WebAudio) com volumes independentes; tudo offline e sem anúncios
 - Android 6.0+ (minSdk 23). O jogo é HTML/Canvas/JS em `app/src/main/assets` (módulos em `js/`), dentro de uma WebView. Arquitetura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Desempenho: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
 

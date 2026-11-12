@@ -60,7 +60,7 @@ function seedSource(seed) {
 function load(seed = 1, store = {}, opts = {}) {
   const els = {};
   const listeners = {};
-  const h = { now: 0, store: Object.assign({}, store), els, listeners };
+  const h = { now: 0, store: Object.assign({}, store), els, listeners, css: {} };
   const sandbox = {
     console,
     document: {
@@ -68,7 +68,7 @@ function load(seed = 1, store = {}, opts = {}) {
       createElement: () => makeEl(),
       createTextNode: (x) => ({ nodeType: 3, textContent: x }),
       addEventListener: (t, f) => { (listeners['doc:' + t] = listeners['doc:' + t] || []).push(f); },
-      documentElement: { style: { setProperty() {} } },
+      documentElement: { style: { setProperty: (k, v) => { h.css[k] = v; } } },
       hidden: false,
     },
     localStorage: {

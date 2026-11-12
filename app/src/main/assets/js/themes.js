@@ -4,6 +4,15 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 const PIECE_KEYS = ['I', 'J', 'L', 'O', 'S', 'T', 'Z'];
 const DEFAULT_PIECES = { I: '#22b59a', J: '#2f62d6', L: '#e8892a', O: '#d9cc1a', S: '#3aa83a', T: '#b01fc0', Z: '#d93a3a' };
 const MAX_CUSTOM_THEMES = 8;
+/** Cores da INTERFACE (painéis, botões, textos). Cada tema embutido tem as suas; temas personalizados podem editar todas. */
+const UI_KEYS = ['panel1', 'panel2', 'btn1', 'btn2', 'btnSmall', 'ink', 'dim', 'val'];
+const UI_LABELS = { panel1: 'Painel (topo)', panel2: 'Painel (base)', btn1: 'Botão (topo)', btn2: 'Botão (base)', btnSmall: 'Botões pequenos', ink: 'Texto', dim: 'Texto secundário', val: 'Valores em destaque' };
+const BUILTIN_UI = [
+  { panel1: '#0c1456', panel2: '#050a35', btn1: '#2f58e6', btn2: '#1a2f9e', btnSmall: '#081046', ink: '#ffffff', dim: '#9fb4ee', val: '#ffd54a' },
+  { panel1: '#1c0d52', panel2: '#0b0526', btn1: '#7a3fe0', btn2: '#4a1a9e', btnSmall: '#1c0a42', ink: '#ffffff', dim: '#c9b3ee', val: '#ffd54a' },
+  { panel1: '#073525', panel2: '#031a12', btn1: '#168257', btn2: '#0d6a48', btnSmall: '#04281e', ink: '#ffffff', dim: '#a6e8cf', val: '#ffd54a' },
+  { panel1: '#3d1c08', panel2: '#1f0d04', btn1: '#c25f17', btn2: '#a04a0c', btnSmall: '#321606', ink: '#ffffff', dim: '#f0c9a0', val: '#ffe08a' },
+];
 const hexRgb = (hx) => { const n = parseInt(hx.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 const rgbHex = (a) => '#' + a.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
 const mixHex = (a, b, t) => { const x = hexRgb(a), y = hexRgb(b); return rgbHex(x.map((v, i) => v + (y[i] - v) * t)); };
@@ -15,7 +24,7 @@ const Theme = {
   MIN_CONTRAST: 2.5, MIN_PIECE_DIST: 60,
   builtin(i) {
     const t = THEMES[i];
-    return { id: i, name: ['Azul', 'Roxo', 'Verde', 'Laranja'][i] || 'Tema ' + (i + 1), bg1: t[0], bg2: t[1], acc: t[2], board1: '#000000', board2: '#020721', grid: rgbHex(t[3].split(',').map(Number)), ghost: '#2a86d6', pieces: Object.assign({}, DEFAULT_PIECES), builtin: true };
+    return Object.assign({ id: i, name: ['Azul', 'Roxo', 'Verde', 'Laranja'][i] || 'Tema ' + (i + 1), bg1: t[0], bg2: t[1], acc: t[2], board1: '#000000', board2: '#020721', grid: rgbHex(t[3].split(',').map(Number)), ghost: '#2a86d6', pieces: Object.assign({}, DEFAULT_PIECES), builtin: true }, BUILTIN_UI[i] || BUILTIN_UI[0]);
   },
   customs() {
     const d = Store.getJSON('themes', []);
@@ -25,14 +34,26 @@ const Theme = {
   ids() { return THEMES.map((_, i) => i).concat(this.customs().map((c) => c.id)); },
   get(id) { if (typeof id === 'number' && THEMES[id]) return this.builtin(id); return this.customs().find((c) => c.id === id) || null; },
   /** Tema ativo. Se o salvo não existe/está inválido, volta ao padrão (0). */
-  cur() { return this.get(settings.theme) || this.builtin(0); },
+  /** Tema ativo (em cache: o desenho consulta isso várias vezes por quadro). Invalidado por applyTheme()/save/remove. */
+  _c: null,
+  invalidate() { this._c = null; },
+  cur() { if (this._c && this._c.id === settings.theme) return this._c.t; const t = this.get(settings.theme) || this.builtin(0); this._c = { id: settings.theme, t }; return t; },
   parseId(v) { if (v == null || v === '') return 0; if (/^c\d+$/.test(String(v))) return String(v); const n = parseInt(v, 10); return isFinite(n) && n >= 0 && n < THEMES.length ? n : 0; },
   /** Array compatível com TH(): [bg1,bg2,acc,glowRGB,frameRGB,btnRGB,grad1,grad2] */
   arr() {
     const t = this.cur();
-    if (t.builtin) return THEMES[t.id];
+    if (t.builtin) { const a = THEMES[t.id].slice(); a[5] = hexRgb(t.btnSmall).join(','); a[6] = t.btn1; a[7] = t.btn2; return a; }
     const g = hexRgb(t.acc);
-    return [t.bg1, t.bg2, t.acc, g.join(','), hexRgb(mixHex(t.acc, '#000000', 0.55)).join(','), hexRgb(mixHex(t.acc, '#000000', 0.88)).join(','), mixHex(t.acc, '#000000', 0.3), mixHex(t.acc, '#000000', 0.55)];
+    return [t.bg1, t.bg2, t.acc, g.join(','), hexRgb(mixHex(t.acc, '#000000', 0.55)).join(','), hexRgb(t.btnSmall).join(','), t.btn1, t.btn2];
+  },
+  /** Cores da interface do tema ativo (hex). */
+  ui() { const t = this.cur(), o = {}; UI_KEYS.forEach((k) => { o[k] = t[k]; }); return o; },
+  /** Cores de interface derivadas do destaque (temas personalizados antigos, sem estas cores, continuam válidos). */
+  deriveUi(acc) {
+    const dark = (t, min) => { let c = mixHex(acc, '#000000', t); for (let k = t; contrast('#ffffff', c) < min && k < 0.97; ) { k += 0.05; c = mixHex(acc, '#000000', k); } return c; };   // sempre legível com texto branco
+    const p1 = dark(0.78, 8), p2 = dark(0.9, 10);
+    let dim = mixHex(acc, '#ffffff', 0.55); for (let k = 0.55; (contrast(dim, p1) < 3.2 || contrast(dim, p2) < 3.2) && k < 1; ) { k += 0.05; dim = mixHex(acc, '#ffffff', Math.min(1, k)); }
+    return { panel1: p1, panel2: p2, btn1: dark(0.45, 3.2), btn2: dark(0.62, 4), btnSmall: dark(0.88, 8), ink: '#ffffff', dim, val: '#ffd54a' };
   },
   extras() { const t = this.cur(); return { board1: t.board1, board2: t.board2, grid: hexRgb(t.grid).join(','), ghost: t.ghost }; },
   applyPieces() { Object.assign(COLORS, this.cur().pieces); },
@@ -45,11 +66,18 @@ const Theme = {
     for (const k of ['bg1', 'bg2', 'acc', 'board1', 'board2', 'grid', 'ghost']) { if (HEX.test(String(t[k]))) o[k] = String(t[k]).toLowerCase(); else errors.push('Cor inválida: ' + k); }
     const pc = t.pieces && typeof t.pieces === 'object' ? t.pieces : {};
     for (const k of PIECE_KEYS) { if (HEX.test(String(pc[k]))) o.pieces[k] = String(pc[k]).toLowerCase(); else errors.push('Cor inválida da peça ' + k); }
+    const dUi = this.deriveUi(o.acc || '#6aa3ff');
+    for (const k of UI_KEYS) { if (t[k] === undefined || t[k] === null) o[k] = dUi[k]; else if (HEX.test(String(t[k]))) o[k] = String(t[k]).toLowerCase(); else errors.push('Cor inválida: ' + UI_LABELS[k]); }
     if (!errors.length) {
       for (const k of PIECE_KEYS) for (const b of [o.board1, o.board2]) if (contrast(o.pieces[k], b) < this.MIN_CONTRAST) { errors.push('Peça ' + k + ' com pouco contraste com o tabuleiro'); break; }
       for (let i = 0; i < 7; i++) for (let j = i + 1; j < 7; j++) if (colorDist(o.pieces[PIECE_KEYS[i]], o.pieces[PIECE_KEYS[j]]) < this.MIN_PIECE_DIST) errors.push('Peças ' + PIECE_KEYS[i] + ' e ' + PIECE_KEYS[j] + ' muito parecidas');
       if (contrast(o.ghost, o.board1) < 2) errors.push('Cor da sombra com pouco contraste');
       if (contrast(o.acc, o.bg2) < 2) errors.push('Cor de destaque com pouco contraste com o fundo');
+      for (const p of [o.panel1, o.panel2]) { if (contrast(o.ink, p) < 4.5) { errors.push('Texto com pouco contraste com o painel'); break; } }
+      for (const p of [o.panel1, o.panel2]) { if (contrast(o.dim, p) < 3) { errors.push('Texto secundário com pouco contraste com o painel'); break; } }
+      for (const p of [o.panel1, o.panel2]) { if (contrast(o.val, p) < 3) { errors.push('Cor dos valores com pouco contraste com o painel'); break; } }
+      for (const b of [o.btn1, o.btn2]) { if (contrast(o.ink, b) < 3) { errors.push('Texto com pouco contraste com os botões'); break; } }
+      if (contrast(o.ink, o.btnSmall) < 4.5) errors.push('Texto com pouco contraste com os botões pequenos');
       if (contrast(o.grid, o.board1) < 1.05 && o.grid === o.board1) errors.push('Grade invisível');
     }
     if (typeof o.id === 'string' && /^c\d+$/.test(o.id)) { /* ok */ } else if (!quiet) o.id = null;
@@ -65,10 +93,10 @@ const Theme = {
     const i = list.findIndex((c) => c.id === t.id);
     if (i >= 0) { v.theme.id = t.id; list[i] = v.theme; }
     else { if (list.length >= MAX_CUSTOM_THEMES) return { ok: false, errors: ['Limite de ' + MAX_CUSTOM_THEMES + ' temas personalizados'] }; v.theme.id = this.nextId(list); list.push(v.theme); }
-    this.saveCustoms(list);
+    this.saveCustoms(list); this.invalidate();
     return { ok: true, errors: [], id: v.theme.id };
   },
-  remove(id) { const list = this.customs().filter((c) => c.id !== id); this.saveCustoms(list); if (settings.theme === id) { settings.theme = 0; saveSettings(); applyTheme(); } },
+  remove(id) { const list = this.customs().filter((c) => c.id !== id); this.saveCustoms(list); this.invalidate(); if (settings.theme === id) { settings.theme = 0; saveSettings(); applyTheme(); } },
   duplicate(id) { const t = this.get(id); if (!t) return null; const r = this.save(Object.assign({}, JSON.parse(JSON.stringify(t)), { id: null, builtin: false, name: (t.name + ' cópia').slice(0, 20) })); return r.ok ? r.id : null; },
   exportJSON(id) { const t = this.get(id); if (!t) return ''; const c = JSON.parse(JSON.stringify(t)); delete c.id; delete c.builtin; return JSON.stringify({ type: 'tetris-theme', v: 1, theme: c }); },
   importJSON(str) {
@@ -76,7 +104,7 @@ const Theme = {
     if (!d || d.type !== 'tetris-theme' || d.v !== 1 || !d.theme) return { ok: false, errors: ['Arquivo não é um tema do Tetris (versão 1)'] };
     return this.save(Object.assign({}, d.theme, { id: null }));
   },
-  blank() { const b = this.builtin(0); return { id: null, name: 'Meu tema', bg1: b.bg1, bg2: b.bg2, acc: b.acc, board1: b.board1, board2: b.board2, grid: b.grid, ghost: b.ghost, pieces: Object.assign({}, DEFAULT_PIECES) }; },
+  blank() { const b = this.builtin(0), o = { id: null, name: 'Meu tema', bg1: b.bg1, bg2: b.bg2, acc: b.acc, board1: b.board1, board2: b.board2, grid: b.grid, ghost: b.ghost, pieces: Object.assign({}, DEFAULT_PIECES) }; UI_KEYS.forEach((k) => { o[k] = b[k]; }); return o; },
 };
 function selectTheme(id) { settings.theme = id; saveSettings(); applyTheme(); }
 function drawThemePreview(cv, t) {
@@ -89,6 +117,19 @@ function drawThemePreview(cv, t) {
   put('I', [[0, 10], [1, 10], [2, 10], [3, 10]]); put('O', [[4, 9], [5, 9], [4, 10], [5, 10]]); put('T', [[6, 10], [7, 10], [8, 10], [7, 9]]);
   put('S', [[0, 9], [1, 9], [1, 8], [2, 8]]); put('Z', [[3, 8], [4, 8], [4, 7], [5, 7]]); put('L', [[8, 9], [9, 9], [9, 10], [9, 8]]); put('J', [[6, 9], [6, 8], [7, 8], [8, 8]]);
   c.strokeStyle = t.ghost; c.lineWidth = 1.5; [[3, 1], [4, 1], [5, 1], [4, 2]].forEach(([x, y]) => c.strokeRect(60 + x * 10 + 1, 6 + y * 10 + 1, 8, 8));
+}
+/** Pré-visualização da INTERFACE (painel, textos, botões) com as cores do tema. */
+function drawUiPreview(cv, t) {
+  const c = cv.getContext('2d'), W = 220, H = 118, rr = (x, y, w, h, r) => Skins._rr(c, x, y, w, h, r);
+  let g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, t.bg1); g.addColorStop(1, t.bg2); c.fillStyle = g; c.fillRect(0, 0, W, H);
+  g = c.createLinearGradient(0, 8, 0, H - 8); g.addColorStop(0, t.panel1); g.addColorStop(1, t.panel2); c.fillStyle = g; rr(14, 8, W - 28, H - 16, 10); c.fill(); c.strokeStyle = t.acc; c.lineWidth = 2; c.stroke();
+  c.textBaseline = 'middle'; c.textAlign = 'left'; c.fillStyle = t.ink; c.font = '700 13px sans-serif'; c.fillText('Paused!', 24, 22);
+  c.font = '11px sans-serif'; c.fillText('Score', 24, 41); c.textAlign = 'right'; c.fillStyle = t.val; c.fillText('1.289', W - 24, 41);
+  c.textAlign = 'left'; c.fillStyle = t.dim; c.fillText('Texto secundário', 24, 56);
+  g = c.createLinearGradient(0, 64, 0, 84); g.addColorStop(0, t.btn1); g.addColorStop(1, t.btn2); c.fillStyle = g; rr(24, 64, W - 48, 20, 6); c.fill(); c.strokeStyle = t.acc; c.lineWidth = 1; c.stroke();
+  c.fillStyle = t.ink; c.textAlign = 'center'; c.fillText('Resume', W / 2, 74);
+  const w = (W - 48) / 2 - 3;
+  [24, 24 + w + 6].forEach((x, i) => { c.fillStyle = t.btnSmall; rr(x, 90, w, 16, 5); c.fill(); c.strokeStyle = t.acc; c.stroke(); c.fillStyle = t.ink; c.fillText(i ? 'Música: ON' : 'Sons: ON', x + w / 2, 98); });
 }
 function openThemes() {
   Sheet.push('Temas', (b) => {
@@ -112,20 +153,23 @@ function openThemes() {
 function openThemeEditor(id) {
   const draft = id ? JSON.parse(JSON.stringify(Theme.get(id))) : Theme.blank();
   Sheet.push(id ? 'Editar tema' : 'Novo tema', (b) => {
-    const cv = h('canvas', { width: '220', height: '120', class: 'prev' });
+    const cv = h('canvas', { width: '220', height: '120', class: 'prev' }), cvUi = h('canvas', { width: '220', height: '118', class: 'prev' });
     const msg = h('div', { class: 'errs' });
     const refresh = () => {
       const v = Theme.validate(Object.assign({}, draft, { id: draft.id || 'c0' }), true);
       msg.textContent = v.ok ? '✓ Tema válido' : v.errors.join(' · '); msg.className = 'errs' + (v.ok ? ' ok' : '');
       drawThemePreview(cv, v.theme.pieces && v.theme.board1 ? Object.assign({}, draft, v.theme, { pieces: Object.assign({}, draft.pieces) }) : draft);
+      drawUiPreview(cvUi, Object.assign({}, draft, v.theme.panel1 ? v.theme : {}));
       saveB.disabled = !v.ok;
     };
     const color = (label, get, set) => h('div', { class: 'slrow' }, h('span', { text: label }), h('input', { type: 'color', value: get(), oninput: (e) => { set(e.target.value); refresh(); } }), h('b', { text: '' }));
     const nameIn = h('input', { type: 'text', maxlength: '20', value: draft.name, class: 'txt' }); nameIn.oninput = (e) => { draft.name = e.target.value; refresh(); };
-    b.appendChild(nameIn); b.appendChild(cv); b.appendChild(msg);
+    b.appendChild(nameIn); b.appendChild(cv); b.appendChild(cvUi); b.appendChild(msg);
     [['Fundo (topo)', 'bg1'], ['Fundo (base)', 'bg2'], ['Destaque', 'acc'], ['Tabuleiro (topo)', 'board1'], ['Tabuleiro (base)', 'board2'], ['Grade', 'grid'], ['Sombra', 'ghost']]
       .forEach(([l, k]) => b.appendChild(color(l, () => draft[k], (v) => { draft[k] = v; })));
     PIECE_KEYS.forEach((k) => b.appendChild(color('Peça ' + k, () => draft.pieces[k], (v) => { draft.pieces[k] = v; })));
+    b.appendChild(sec('INTERFACE (janelas, botões e textos)'));
+    UI_KEYS.forEach((k) => b.appendChild(color(UI_LABELS[k], () => draft[k], (v) => { draft[k] = v; })));
     const saveB = btn('Salvar e usar', () => { const r = Theme.save(draft); if (r.ok) { selectTheme(r.id); Sheet.back(); Sheet.refresh(); } else { msg.textContent = r.errors.join(' · '); msg.className = 'errs'; } });
     b.appendChild(saveB); refresh();
   });

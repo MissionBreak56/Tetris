@@ -12,9 +12,11 @@ const THEMES=[
  ['#12805a','#031a14','#62f2b8','30,200,140','10,110,80','4,40,30','#1fa070','#0d6a48'],
  ['#b8601c','#1f0d04','#ffb866','255,140,40','150,70,16','50,22,6','#e8802a','#a04a0c']];
 const TH=()=>Theme.arr();
-function applyTheme(){ Theme.applyPieces(); const t=TH(), st=document.documentElement.style;
+function applyTheme(){ Theme.invalidate(); Theme.applyPieces(); const t=TH(), u=Theme.ui(), st=document.documentElement.style, rgb=(h)=>hexRgb(h).join(',');
   st.setProperty('--acc',t[2]); st.setProperty('--glow',t[3]); st.setProperty('--dk',t[4]);
-  st.setProperty('--btnbg',t[5]); st.setProperty('--b1',t[6]); st.setProperty('--b2',t[7]); }
+  st.setProperty('--btnbg',rgb(u.btnSmall)); st.setProperty('--b1',u.btn1); st.setProperty('--b2',u.btn2);
+  st.setProperty('--p1',rgb(u.panel1)); st.setProperty('--p2',rgb(u.panel2));                       // janelas/painéis
+  st.setProperty('--ink',u.ink); st.setProperty('--dim',u.dim); st.setProperty('--val',u.val); }  // textos e valores
 const COLORS=Object.assign({},DEFAULT_PIECES);
 const SHAPES={
  I:{rot:[[[0,1],[1,1],[2,1],[3,1]],[[2,0],[2,1],[2,2],[2,3]],[[0,2],[1,2],[2,2],[3,2]],[[1,0],[1,1],[1,2],[1,3]]]},
