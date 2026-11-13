@@ -59,7 +59,7 @@ test('toda chave de perfil escrita pelo app está registrada (exclusão de perfi
 });
 test('valores extremos de configuração são saneados', () => {
   const h = load(1, { tetris_startLevel: '9999', tetris_zenLevel: 'abc', tetris_sfxVol: '-4', tetris_ctl: '{"size":1e9,"sens":-3}' });
-  assert.equal(h.get('settings').startLevel, 15); assert.equal(h.get('Prefs').zenLevel(), 1); assert.equal(h.get('settings').sfxVol, 0);
+  assert.equal(h.get('settings').startLevel, 30); assert.equal(h.get('Prefs').zenLevel(), 1); assert.equal(h.get('settings').sfxVol, 0);
   assert.equal(h.get('Controls').cfg.size, 1.1); assert.equal(h.get('Controls').cfg.sens, 0.5);
 });
 test('cenários de borda do motor: peça no topo, rotação sem espaço, hard drop com tabuleiro cheio', () => {

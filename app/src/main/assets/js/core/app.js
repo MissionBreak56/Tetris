@@ -26,7 +26,7 @@ $('bTheme').onclick=()=>{const ids=Theme.ids(), i=ids.indexOf(settings.theme); s
 function openLevelSheet(){
   Sheet.push('Nível inicial',(b)=>{
     const g=h('div',{class:'grid'});
-    for(let i=1;i<=15;i++) g.appendChild(btn(String(i),()=>{settings.startLevel=i;saveSettings();refreshMenu();Sheet.back();}));
+    for(let i=1;i<=30;i++) g.appendChild(btn(String(i),()=>{settings.startLevel=i;saveSettings();refreshMenu();Sheet.back();}));
     b.appendChild(g);
   });
 }

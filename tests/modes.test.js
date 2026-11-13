@@ -52,8 +52,8 @@ test('Zen: sessão salva ao sair (estatísticas/histórico) mas sem recorde de m
   const g = fresh(4); g.G().ms = 1000; g.sb.leaveGame();
   assert.equal(g.get('History').load().length, 0);
 });
-test('Zen: preferência de velocidade persiste e é limitada a 1..15', () => {
-  const h = load(1); h.get('Prefs').setZenLevel(99); assert.equal(load(1, h.store).get('Prefs').zenLevel(), 15);
+test('Zen: preferência de velocidade persiste e é limitada a 1..30', () => {
+  const h = load(1); h.get('Prefs').setZenLevel(99); assert.equal(load(1, h.store).get('Prefs').zenLevel(), 30);
   h.get('Prefs').setZenLevel(-3); assert.equal(h.get('Prefs').zenLevel(), 1);
 });
 

@@ -40,7 +40,7 @@ function readSettings(){ return {
   ghost: LS('isShowGhost')!=='0', vib: LS('isVabiration')==='1',
   touch: LS('isTouchControl')!=='0', theme: Theme.parseId(LS('index_bg')), skin: Skins.valid(LS('skin'))?LS('skin'):'classic',
   musicVol: readVol('musicVol'), sfxVol: readVol('sfxVol'), fx: LS('isFx')!=='0', oppView: LS('oppView')!=='0',
-  startLevel: Math.min(15,Math.max(1,parseInt(LS('startLevel'),10)||1))
+  startLevel: Math.min(30,Math.max(1,parseInt(LS('startLevel'),10)||1))
 }; }
 const settings=readSettings();
 /** Recarrega tudo que depende do perfil ativo (chamado ao trocar/excluir perfil). */

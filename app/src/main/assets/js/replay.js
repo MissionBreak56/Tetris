@@ -38,7 +38,7 @@ const Replays = {
     if (r.eng !== ENGINE_VERSION) e.push('Replay de outra versão do motor (' + r.eng + ')');
     if (!Number.isInteger(r.mode) || r.mode < 1 || r.mode > 7) e.push('Modo inválido');
     if (!Number.isInteger(r.seed) || r.seed < 0 || r.seed > 4294967295) e.push('Semente inválida');
-    if (!Number.isInteger(r.sl) || r.sl < 1 || r.sl > 15) e.push('Nível inicial inválido');
+    if (!Number.isInteger(r.sl) || r.sl < 1 || r.sl > 30) e.push('Nível inicial inválido');
     if (!Number.isInteger(r.ticks) || r.ticks < 0 || r.ticks > this.MAX_TICKS) e.push('Duração inválida');
     if (!Array.isArray(r.ev) || r.ev.length % 2 || r.ev.length > this.MAX_EV * 2) e.push('Eventos inválidos');
     else {

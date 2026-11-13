@@ -7,6 +7,6 @@ const Modes = {
   openFromHome(key) { const m = this.list.find((x) => x.key === key); if (!m) return false; Sheet.stack = []; hide('menu'); show('sheet'); m.open(); return true; },
 };
 const Prefs = {
-  zenLevel() { return Math.min(15, Math.max(1, Math.round(num(parseFloat(Store.get('zenLevel')), 1)))); },
-  setZenLevel(v) { Store.set('zenLevel', Math.min(15, Math.max(1, Math.round(v)))); },
+  zenLevel() { return Math.min(30, Math.max(1, Math.round(num(parseFloat(Store.get('zenLevel')), 1)))); },
+  setZenLevel(v) { Store.set('zenLevel', Math.min(30, Math.max(1, Math.round(v)))); },
 };
