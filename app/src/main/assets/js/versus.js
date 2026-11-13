@@ -29,7 +29,7 @@ const Versus = {
     const seed = cfg.seed != null ? cfg.seed >>> 0 : (Math.random() * 4294967296) >>> 0;
     this.cfg = cfg; this.pend = [0, 0]; this.sent = [0, 0]; this.ticks = 0; this.acc = 0; this.over = false; this.result = null; this.touch = [null, null];
     this.rng = mkRng(seed ^ 0x9e3779b9); this.B = [];
-    this.net = cfg.net ? { local: cfg.net.local, q: [{}, {}], remoteUpto: -1, out: [], snaps: {}, rb: null, endTick: null, nextH: Net.HASH_EVERY, hashes: {}, remoteHashes: {} } : null;
+    this.net = cfg.net ? { local: cfg.net.local, soft: [false, false], q: [{}, {}], remoteUpto: -1, out: [], snaps: {}, rb: null, endTick: null, nextH: Net.HASH_EVERY, hashes: {}, remoteHashes: {} } : null;
     this.layouts();
     const keep = G;
     for (let i = 0; i < 2; i++) {
@@ -149,9 +149,13 @@ const Versus = {
   input(p, code) {
     if (this.net) {                                                   // ação local: vale já no próximo tick (sem atraso) e é enviada na hora
       const g = this.B[p]; if (p !== this.net.local || !g || g.overDone || this.over || state !== 'VERSUS') return false;
+      const sf = this.net.soft;                                       // queda suave: segue a INTENÇÃO (g.soft só muda no próximo tick; soltar o dedo no mesmo quadro perdia o SOFT_OFF e a peça caía sem parar)
+      if (code === A.SOFT_ON) { if (sf[p]) return false; sf[p] = true; } else if (code === A.SOFT_OFF) { if (!sf[p]) return false; sf[p] = false; }
       const t = this.ticks; (this.net.q[p][t] = this.net.q[p][t] || []).push(code); this.net.out.push([t, code]); Net.pump(true); return true;
     }
     const g = this.B[p]; if (!g || g.overDone || g.ai) return false; return this.withBoard(p, () => act(code, true)); },
+  /** Queda suave pedida pelo jogador p (online: a intenção já enviada; local: o estado do tabuleiro, que muda na hora). */
+  softOn(p) { return this.net ? !!this.net.soft[p] : !!this.B[p].soft; },
   playerAt(x) { if (this.net) return this.net.local; return this.humans() >= 2 ? (x < W / 2 ? 0 : 1) : 0; },
   /* ---------- desenho ---------- */
   mini(t, cx, cy, s) {
@@ -341,7 +345,7 @@ addEventListener('pointermove', (e) => {
   const t = Versus.touch.find((q) => q && q.id === e.pointerId); if (!t) return;
   const C = Versus.cellV, step = C * 0.9 / Controls.cfg.sens, sd = 1 / Controls.cfg.soft, g = Versus.B[t.p]; let dx = e.clientX - t.x, guard = 0;
   while (Math.abs(dx) >= step && guard++ < 6) { const s = dx > 0 ? 1 : -1; Versus.input(t.p, s > 0 ? A.RIGHT : A.LEFT); t.x += s * step; dx = e.clientX - t.x; t.moved = true; }
-  if (e.clientY - t.sy > C * 1.2 * sd) { if (!g.soft) Versus.input(t.p, A.SOFT_ON); t.moved = true; } else if (g.soft && e.clientY - t.sy < C * 0.6 * sd) Versus.input(t.p, A.SOFT_OFF);
+  if (e.clientY - t.sy > C * 1.2 * sd) { if (!Versus.softOn(t.p)) Versus.input(t.p, A.SOFT_ON); t.moved = true; } else if (Versus.softOn(t.p) && e.clientY - t.sy < C * 0.6 * sd) Versus.input(t.p, A.SOFT_OFF);
 });
 function endVsTouch(e, cancel) {
   const t = Versus.touch.find((q) => q && q.id === e.pointerId); if (!t) return;
@@ -351,7 +355,7 @@ function endVsTouch(e, cancel) {
     else if (vy > 0.6 / Controls.cfg.swipe && dy > C * 1.5 / Controls.cfg.swipe) Versus.input(t.p, A.HARD);
     else if (vy < -0.6 / Controls.cfg.swipe && dy < -C * 1.5 / Controls.cfg.swipe) Versus.input(t.p, A.HOLD);
   }
-  if (g.soft) Versus.input(t.p, A.SOFT_OFF);
+  if (Versus.softOn(t.p)) Versus.input(t.p, A.SOFT_OFF);
   Versus.touch[t.p] = null;
 }
 addEventListener('pointerup', (e) => endVsTouch(e, false));

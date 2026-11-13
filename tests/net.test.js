@@ -383,6 +383,20 @@ test('tela cheia: gestos usam o tamanho de célula solo (arrastar, tocar à esqu
   a.now = 0; a.fire('pointerdown', { pointerId: 4, clientX: 200, clientY: 200, target: ui }); a.now = 100; a.fire('pointerup', { pointerId: 4, clientX: 200, clientY: 200 + C * 3 });
   assert.ok(codes(mark).includes(4), 'deslizar para baixo derruba');
 });
+test('queda suave não "gruda" online: deslizar rápido para baixo (soltar no mesmo quadro) sempre envia SOFT_OFF e as peças do oponente não caem sem parar', () => {
+  for (const [name, gesture] of [
+    ['deslize rápido (hard drop) logo após ligar a queda suave', (a, C, ui) => { a.now = 0; a.fire('pointerdown', { pointerId: 1, clientX: 200, clientY: 200, target: ui }); a.now = 40; a.fire('pointermove', { pointerId: 1, clientX: 200, clientY: 200 + C * 1.3 }); a.now = 50; a.fire('pointerup', { pointerId: 1, clientX: 200, clientY: 200 + C * 3 }); }],
+    ['descer e voltar antes do próximo tick', (a, C, ui) => { a.now = 0; a.fire('pointerdown', { pointerId: 1, clientX: 200, clientY: 200, target: ui }); a.fire('pointermove', { pointerId: 1, clientX: 200, clientY: 200 + C * 1.3 }); a.fire('pointermove', { pointerId: 1, clientX: 200, clientY: 200 + C * 0.1 }); a.now = 900; a.fire('pointerup', { pointerId: 1, clientX: 200, clientY: 200 + C * 0.1 }); }],
+    ['cancelamento do toque (pointercancel) com a queda suave ligada', (a, C, ui) => { a.now = 0; a.fire('pointerdown', { pointerId: 1, clientX: 200, clientY: 200, target: ui }); a.fire('pointermove', { pointerId: 1, clientX: 200, clientY: 200 + C * 1.3 }); a.fire('pointercancel', { pointerId: 1, clientX: 200, clientY: 200 + C * 1.3 }); }],
+  ]) {
+    const P = startMatch(pair({ lat: 2 })), a = P.A, b = P.B, C = a.get('CELL'), ui = { closest: () => null };
+    P.tick(3); gesture(a, C, ui);
+    P.tick(240);
+    assert.equal(V(a).B[0].soft, false, name + ': A (local) ficou com queda suave ligada');
+    assert.equal(V(b).B[0].soft, false, name + ': no aparelho do oponente a peça de A cai sem parar');
+    assert.equal(V(a).over, false, name);
+  }
+});
 test('tela cheia: o cliente (tabuleiro 1) também controla e vê o próprio tabuleiro', () => {
   const P = startMatch(pair({ lat: 2 })); const b = P.B, v = V(b);
   assert.equal(v.net.local, 1); const x0 = v.B[1].active.x; assert.equal(v.input(1, 0), true); P.tick(1);
