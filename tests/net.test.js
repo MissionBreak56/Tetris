@@ -12,7 +12,7 @@ function pair({ lat = 0, jitter = 0, seed = 1, names = ['Ana', 'Beto'] } = {}) {
   const A = load(11), B = load(22); let step = 0, x = seed >>> 0;
   const rnd = () => (x = (Math.imul(x, 1664525) + 1013904223) >>> 0);
   const q = { ab: [], ba: [] }, sent = { a: [], b: [] }, T = {};
-  const mk = (dir, log) => ({ closed: false, hosted: null, joined: null, available: () => true, host(n, p) { this.closed = false; this.hosted = [n, p]; }, scan() {}, join(ip, p) { this.closed = false; this.joined = [ip, p]; }, close() { this.closed = true; },
+  const mk = (dir, log) => ({ closed: false, hosted: null, joined: null, available: () => true, host(n, p) { if (!this.down) this.closed = false; this.hosted = [n, p]; }, listen(p) { if (!this.down) this.closed = false; this.listened = (this.listened || 0) + 1; }, scan() {}, join(ip, p) { if (!this.down) this.closed = false; this.joined = [ip, p]; this.joins = (this.joins || 0) + 1; }, close() { this.closed = true; },
     send(line) { log.push(line); if (this.closed) return; const due = step + lat + (jitter ? rnd() % (jitter + 1) : 0), arr = q[dir], last = arr.length ? arr[arr.length - 1][0] : 0; arr.push([Math.max(due, last), line]); } });
   T.a = mk('ab', sent.a); T.b = mk('ba', sent.b);
   const clock = () => step * 1000 / 60;                                    // relógio da simulação (1 quadro = 16,67 ms)
@@ -56,7 +56,7 @@ test('conexão: aperto de mão leva os dois ao lobby com os nomes do oponente', 
   assert.equal(P.T.a.hosted[1], 47600); assert.deepEqual(P.T.b.joined, ['192.168.0.5', 47600]);
 });
 test('conexão: versão do protocolo ou do motor diferente é recusada com mensagem', () => {
-  for (const bad of [{ p: 2, eng: 'E2' }, { p: 3, eng: 'E1' }]) {
+  for (const bad of [{ p: 3, eng: 'E2' }, { p: 4, eng: 'E1' }]) {
     const h = load(1); const fake = { available: () => true, host() {}, scan() {}, join() {}, close() { this.closed = true; }, send(l) { this.out.push(l); }, out: [] };
     h.sb.__T = fake; h.run('Net.T=__T'); NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
     NetOf(h)._line(JSON.stringify(Object.assign({ k: 'hello', name: 'X' }, bad)));
@@ -69,13 +69,13 @@ test('conexão: mensagens malformadas, grandes ou antes do hello são ignoradas'
   NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
   for (const junk of ['', 'x', '[]', '5', 'null', '{"k":5}', '{"k":"start","seed":1}', '{"k":"in","u":1,"e":[]}', 'x'.repeat(20000), '{"k":"hello","p":1,"eng":"E2"' ]) NetOf(h)._line(junk);
   assert.equal(NetOf(h).st, 'handshake'); assert.equal(NetOf(h).peer, null);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 3, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 4, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
   assert.equal(NetOf(h).st, 'lobby'); assert.ok(!/[<>\n]/.test(NetOf(h).peer.name) && NetOf(h).peer.name.length <= 16);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 3, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 4, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
 });
 test('conexão: nome igual ao seu recebe sufixo; tempo esgotado no aperto de mão desconecta', () => {
   const h = load(1); h.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; h.run('Net.T=__T');
-  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 3, eng: 'E2', name: 'Jogador 1' }));
+  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 4, eng: 'E2', name: 'Jogador 1' }));
   assert.equal(NetOf(h).peer.name, 'Jogador 1 (2)');
   const g = load(1); g.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; g.run('Net.T=__T');
   NetOf(g).host(); NetOf(g)._ev({ e: 'connected' }); let t = Date.now(); NetOf(g).now = () => t; NetOf(g).hsAt = t; t += 6000; NetOf(g).heartbeat();
@@ -123,11 +123,105 @@ test('desistir: quem abandona perde, o outro vence imediatamente; resultado/esta
   assert.equal(plain(P.A.get('StatsMgr').load()).modes[10].wins, 1); assert.ok(plain(P.A.get('Achv').load()).online_win);
   V(P.B).showEnd(); assert.equal(P.B.els.endTitle.textContent, 'VOCÊ PERDEU'); assert.equal(plain(P.B.get('StatsMgr').load()).modes[10].games, 1);
 });
-test('queda da conexão e silêncio prolongado dão a vitória ao outro lado', () => {
+/** Derruba a rede: mensagens em trânsito se perdem e os dois lados recebem "closed". Fica fora do ar até relink(). */
+function drop(P, why = 'Conexão perdida') {
+  P.q.ab.length = 0; P.q.ba.length = 0; P.T.a.down = P.T.b.down = true; P.T.a.closed = P.T.b.closed = true;
+  NetOf(P.A)._ev({ e: 'closed', why }); NetOf(P.B)._ev({ e: 'closed', why });
+}
+/** A rede volta: o anfitrião (listen) e o cliente (join) recebem "connected" na nova conexão. */
+function relink(P) {
+  P.T.a.down = P.T.b.down = false; P.T.a.closed = P.T.b.closed = false;
+  NetOf(P.A)._ev({ e: 'connected', peer: '192.168.0.6' }); NetOf(P.B)._ev({ e: 'connected', peer: '192.168.0.5' });
+}
+test('queda da conexão no meio da partida NÃO é derrota: os dois entram em "reconectando", o jogo para e o anfitrião reabre a porta / o cliente tenta de novo', () => {
+  const P = startMatch(pair({ lat: 2 })); P.tick(60);
+  drop(P); const ta = V(P.A).ticks, tb = V(P.B).ticks;
+  P.tick(90);                                                                // 1,5 s sem rede
+  assert.equal(NetOf(P.A).st, 'reconnecting'); assert.equal(NetOf(P.B).st, 'reconnecting');
+  assert.equal(V(P.A).over, false); assert.equal(V(P.B).over, false); assert.equal(V(P.A).result, null);
+  assert.equal(V(P.A).ticks, ta); assert.equal(V(P.B).ticks, tb, 'jogo parado enquanto reconecta');
+  assert.ok(P.T.a.listened >= 1, 'anfitrião reabriu a porta'); assert.ok(P.T.b.joins >= 2, 'cliente tentou reconectar (' + P.T.b.joins + ')');
+});
+test('retomada: depois de uma queda (com mensagens perdidas em trânsito) o jogo continua e termina idêntico nos dois aparelhos e à simulação de referência', () => {
+  for (const [lat, jit, seed] of [[0, 0, 41], [3, 2, 42], [9, 4, 43]]) {
+    const P = logInputs(startMatch(pair({ lat, jitter: jit, seed }))), inp = randomInputs(seed * 5);
+    for (let i = 0; i < 70; i++) P.tick(1, inp);
+    assert.equal(V(P.A).over, false); assert.equal(V(P.B).over, false);
+    drop(P); for (let i = 0; i < 120; i++) P.tick(1, inp);                   // 2 s sem rede (entradas durante a queda são recusadas)
+    relink(P); P.tick(lat + 4); assert.equal(NetOf(P.A).st, 'playing'); assert.equal(NetOf(P.B).st, 'playing');
+    playOut(P, seed * 5);
+    const a = V(P.A), b = V(P.B);
+    assert.equal(a.result.aborted, undefined, 'A lat=' + lat + ' ' + (a.result.reason || '')); assert.equal(b.result.aborted, undefined, 'B lat=' + lat + ' ' + (b.result.reason || ''));
+    assert.deepEqual(plain(a.result), plain(b.result)); assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap()));
+    const ref = reference(P, a.cfg.seed); assert.equal(ref.ticks, a.ticks); assert.equal(ref.hash, a.snapHash(a.snap()), 'referência lat=' + lat);
+    assert.equal(NetOf(P.A).resumes, 1); assert.equal(NetOf(P.B).resumes, 1);
+  }
+});
+test('retomada: várias quedas seguidas na mesma partida (inclui queda logo após retomar) continuam convergindo', () => {
+  const P = logInputs(startMatch(pair({ lat: 2, jitter: 1, seed: 51 }))), inp = randomInputs(321);
+  for (let k = 0; k < 4 && !(V(P.A).over || V(P.B).over); k++) {
+    for (let i = 0; i < 25 + k * 12; i++) P.tick(1, inp);
+    if (V(P.A).over || V(P.B).over) break; drop(P); for (let i = 0; i < 40 + k * 20; i++) P.tick(1, inp); relink(P); P.tick(1, inp);
+  }
+  playOut(P, 321);
+  const a = V(P.A), b = V(P.B); assert.equal(a.result.aborted, undefined, a.result.reason); assert.equal(b.result.aborted, undefined, b.result.reason);
+  assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap())); assert.equal(reference(P, a.cfg.seed).hash, a.snapHash(a.snap()));
+});
+test('estresse: quedas aleatórias (momento e duração variados, com latência/jitter e queda suave ligada) nunca desincronizam nem abortam a partida', () => {
+  let total = 0;
+  for (let k = 1; k <= 14; k++) {
+    const r = lcg(7000 + k), P = logInputs(startMatch(pair({ lat: k % 6, jitter: k % 4, seed: 800 + k }))), inp = randomInputs(4000 + k);
+    let drops = 0;
+    for (let step = 0; step < 4000 && !(V(P.A).over && V(P.B).over); step++) {
+      P.tick(1, inp);
+      if (drops < 3 && !V(P.A).over && !V(P.B).over && step > 10 && r() % 90 === 0) {
+        drops++; total++; if (r() % 2) { V(P.A).input(0, 6); V(P.B).input(1, 6); }          // queda suave ligada na hora da queda
+        drop(P); const out = 5 + (r() % 200); for (let i = 0; i < out; i++) P.tick(1, inp); relink(P);
+      }
+    }
+    for (let i = 0; i < 20000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+    const a = V(P.A), b = V(P.B); assert.ok(a.over && b.over, 'terminou k=' + k);
+    assert.equal(a.result.aborted, undefined, 'A k=' + k + ' ' + (a.result.reason || '')); assert.equal(b.result.aborted, undefined, 'B k=' + k + ' ' + (b.result.reason || ''));
+    assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap()), 'estado k=' + k); assert.equal(reference(P, a.cfg.seed).hash, a.snapHash(a.snap()), 'referência k=' + k);
+  }
+  assert.ok(total >= 8, 'houve quedas suficientes (' + total + ')');
+});
+test('reconexão desiste depois do prazo: partida interrompida SEM vencedor (não dá vitória a quem ficou nem derrota a quem caiu)', () => {
+  const P = startMatch(pair()); P.tick(40); drop(P);
+  P.tick(Math.ceil(NetOf(P.A).GRACE_MS / 1000 * 60) + 90);
+  for (const h of [P.A, P.B]) { const v = V(h); assert.equal(v.over, true); assert.equal(v.result.aborted, true); assert.equal(v.result.winner, -1); assert.match(v.result.reason, /não restabelecida/); }
+});
+test('"bye" explícito (oponente saiu de propósito) continua dando vitória na hora; silêncio prolongado agora tenta reconectar', () => {
   const P = startMatch(pair()); P.tick(30);
-  NetOf(P.A)._ev({ e: 'closed', why: 'Conexão perdida' }); assert.equal(V(P.A).result.winner, 0); assert.equal(NetOf(P.A).st, 'ended');
-  const Q = startMatch(pair()); Q.tick(30); let t = Date.now(); NetOf(Q.B).now = () => t; NetOf(Q.B).lastRx = t; t += 8000; NetOf(Q.B).heartbeat();
-  assert.equal(V(Q.B).result.winner, 1); assert.match(V(Q.B).result.reason, /Conexão perdida/);
+  NetOf(P.A)._line(JSON.stringify({ k: 'bye' })); assert.equal(V(P.A).result.winner, 0); assert.equal(NetOf(P.A).st, 'ended');
+  const Q = startMatch(pair()); Q.tick(30); let t = Date.now(); NetOf(Q.B).now = () => t; NetOf(Q.B).lastRx = t; NetOf(Q.B).beatAt = t; for (let i = 0; i < 12; i++) { t += 500; NetOf(Q.B).heartbeat(); }   // 6 s sem receber nada
+  assert.equal(NetOf(Q.B).st, 'reconnecting'); assert.equal(V(Q.B).over, false);
+});
+test('resincronia: mensagens duplicadas são ignoradas, uma lacuna pede reenvio (rs) e o reenvio entrega o que faltava', () => {
+  const P = logInputs(startMatch(pair({ lat: 1, seed: 61 }))), inp = randomInputs(9);
+  for (let i = 0; i < 60; i++) P.tick(1, inp);
+  const a = NetOf(P.A), b = NetOf(P.B), before = b.rxSeq, old = P.sent.a.find((l) => { const m = JSON.parse(l); return m.k === 'in' && m.s === before; });
+  assert.ok(old); b._line(old); b._line(old);                                // duplicata de uma mensagem já processada: nada acontece
+  assert.equal(b.rxSeq, before); assert.equal(V(P.B).over, false);
+  const mark = P.sent.b.length; b._line(JSON.stringify({ k: 'in', s: before + 5, a: 0, u: 5, e: [] }));   // lacuna
+  assert.equal(b.rxSeq, before); assert.ok(P.sent.b.slice(mark).some((l) => JSON.parse(l).k === 'rs' && JSON.parse(l).a === before), 'pediu reenvio');
+  const exp = a.msgLog.filter((e) => e.s > a.peerAck).map((e) => e.s); assert.ok(exp.length >= 1);
+  const mk = P.sent.a.length; a._line(JSON.stringify({ k: 'rs', a: 0 }));                  // pedido antigo: só volta o que o oponente ainda não confirmou
+  const re = P.sent.a.slice(mk).map((l) => JSON.parse(l)).filter((m) => m.k === 'in'); assert.deepEqual(re.map((m) => m.s), Array.from(exp), 'reenviou só o não confirmado, em ordem');
+  playOut(P, 9); const x = V(P.A), y = V(P.B); assert.equal(x.result.aborted, undefined); assert.equal(y.result.aborted, undefined); assert.equal(x.snapHash(x.snap()), y.snapHash(y.snap()));
+});
+test('retomada segura: sessão diferente ou protocolo errado é ignorado e a mensagem de ações não vira atalho', () => {
+  const P = startMatch(pair()); P.tick(30); drop(P); P.tick(40);
+  const a = NetOf(P.A); const good = { k: 'resume', p: a.PROTO, eng: P.A.get('ENGINE_VERSION'), sid: a.sid, a: -1 };
+  for (const bad of [{ sid: 'deadbeefdeadbeef' }, { p: 3 }, { eng: 'XX' }, { a: 99999 }, { a: 'x' }, { sid: 5 }]) { a._line(JSON.stringify(Object.assign({}, good, bad))); assert.equal(a.st, 'reconnecting', JSON.stringify(bad)); }
+  P.T.a.down = false; P.T.a.closed = false; a._ev({ e: 'connected', peer: '10.0.0.9' }); a._line(JSON.stringify(good)); assert.equal(a.st, 'playing', 'resume correto retoma');
+});
+test('durante a queda só SOFT_OFF é aceito (nenhuma entrada fica acumulada e a queda suave não fica presa)', () => {
+  const P = startMatch(pair()); P.tick(20); const a = P.A, v = V(a);
+  assert.equal(v.input(0, 6), true); P.tick(2); assert.equal(v.B[0].soft, true);
+  drop(P); P.tick(5);
+  assert.equal(v.input(0, 0), false); assert.equal(v.input(0, 4), false); assert.equal(v.input(0, 7), true, 'SOFT_OFF passa');
+  relink(P); P.tick(10); assert.equal(V(P.A).B[0].soft, false); assert.equal(V(P.B).B[0].soft, false);
 });
 test('botão pausar/voltar no online pede confirmação de desistência (não pausa)', () => {
   const P = startMatch(pair()); P.tick(5); P.A.sb.handleBack();

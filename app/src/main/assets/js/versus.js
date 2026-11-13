@@ -4,7 +4,7 @@
 const COMBO_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
 const GARBAGE_COLOR = '#707070';
 const Versus = {
-  PRED_MAX: 30, SNAP_WIN: 40,
+  PRED_MAX: 45, SNAP_WIN: 70,
   active: false, net: null, cfg: null, B: [], pend: [0, 0], sent: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,
   layouts() {
     if (this.net) { this.cellV = CELL; this.lay = [L, L]; return; }          // online: cada um vê SÓ a sua tela (layout solo); gestos usam o tamanho de célula solo
@@ -29,7 +29,7 @@ const Versus = {
     const seed = cfg.seed != null ? cfg.seed >>> 0 : (Math.random() * 4294967296) >>> 0;
     this.cfg = cfg; this.pend = [0, 0]; this.sent = [0, 0]; this.ticks = 0; this.acc = 0; this.over = false; this.result = null; this.touch = [null, null];
     this.rng = mkRng(seed ^ 0x9e3779b9); this.B = [];
-    this.net = cfg.net ? { local: cfg.net.local, soft: [false, false], q: [{}, {}], remoteUpto: -1, out: [], snaps: {}, rb: null, endTick: null, nextH: Net.HASH_EVERY, hashes: {}, remoteHashes: {} } : null;
+    this.net = cfg.net ? { local: cfg.net.local, link: true, soft: [false, false], q: [{}, {}], remoteUpto: -1, out: [], snaps: {}, rb: null, endTick: null, nextH: Net.HASH_EVERY, hashes: {}, remoteHashes: {} } : null;
     this.layouts();
     const keep = G;
     for (let i = 0; i < 2; i++) {
@@ -92,6 +92,7 @@ const Versus = {
     this.acc += dt; let n = 0;
     if (this.net) {                                                   // previsão + correção: avança sem esperar o oponente (até PRED_MAX ticks)
       Net.pump(); this.netRollback();
+      if (!this.net.link) { this.acc = 0; this.netCheck(); return; }          // conexão caída (reconectando): jogo parado para os dois, sem acumular tempo
       while (this.acc >= STEP && n < 6 && !this.over && state === 'VERSUS' && this.net && this.ticks - (this.net.remoteUpto + 1) < this.PRED_MAX) { this.acc -= STEP; this.netTick(); n++; }
       if (this.acc > STEP * 6) this.acc = STEP * 6;
       if (this.net) { this.netCheck(); Net.pump(); }
@@ -149,6 +150,7 @@ const Versus = {
   input(p, code) {
     if (this.net) {                                                   // ação local: vale já no próximo tick (sem atraso) e é enviada na hora
       const g = this.B[p]; if (p !== this.net.local || !g || g.overDone || this.over || state !== 'VERSUS') return false;
+      if (!this.net.link && code !== A.SOFT_OFF) return false;
       const sf = this.net.soft;                                       // queda suave: segue a INTENÇÃO (g.soft só muda no próximo tick; soltar o dedo no mesmo quadro perdia o SOFT_OFF e a peça caía sem parar)
       if (code === A.SOFT_ON) { if (sf[p]) return false; sf[p] = true; } else if (code === A.SOFT_OFF) { if (!sf[p]) return false; sf[p] = false; }
       const t = this.ticks; (this.net.q[p][t] = this.net.q[p][t] || []).push(code); this.net.out.push([t, code]); Net.pump(true); return true;
@@ -210,6 +212,8 @@ Versus.snap = function () { return { B: this.B.map(cloneBoard), pend: this.pend.
 Versus.unsnap = function (s, tick) {
   s.B.forEach((b, i) => restoreBoard(this.B[i], b)); this.pend = s.pend.slice(); this.sent = s.sent.slice(); this.rng.set(s.vr); this.ticks = tick;
 };
+/** Conexão caiu (false) ou voltou (true): com a conexão caída o jogo para dos dois lados (o oponente para sozinho ao esgotar a previsão). */
+Versus.netLink = function (ok) { if (!this.net) return; this.net.link = !!ok; if (!ok) this.acc = 0; };
 Versus.netApply = function (t) {
   for (let i = 0; i < 2; i++) {
     const ev = this.net.q[i][t]; if (!ev) continue;
@@ -307,6 +311,7 @@ Versus.netHud = function (g, op, me) {
   txt('vs ' + nm + (p != null ? '  ·  ' + Math.round(p) + ' ms' : ''), W / 2, L.hudY + C * 0.95, C * 0.5, 'rgba(255,255,255,.7)', 'center', '600');
   const pe = this.pend[me];                                           // lixo a caminho: barra vermelha na margem esquerda da moldura
   if (pe > 0) { const hh = Math.min(pe, ROWS) * C; ctx.fillStyle = '#ff4d4d'; ctx.fillRect(L.bx - L.pad * 0.42, L.by + L.bh - hh, L.pad * 0.3, hh); }
+  this.netBanner(C);
   if (settings.oppView) {                                             // miniatura do oponente (coluna esquerda, abaixo do Hold)
     const w = L.hold.w, cs = w / COLS, x0 = L.hold.x, y0 = L.hold.y + L.hold.h + C * 1.3, hh = ROWS * cs;
     txt(nm.slice(0, 8), x0 + w / 2, y0 - C * 0.45, C * 0.4, Theme.ui().dim, 'center', '600');
@@ -322,6 +327,16 @@ Versus.netHud = function (g, op, me) {
     ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(L.bx, L.by, L.bw, L.bh);
     txt(g.overDone ? 'K.O.' : (win ? 'WIN' : ''), L.bx + L.bw / 2, L.by + L.bh / 2, C * 2.2, g.overDone ? '#ff6a6a' : '#7dffa0', 'center', '800');
   }
+};
+/** Aviso na tela: reconectando (com contagem) ou aguardando o oponente (previsão esgotada / sem sinal). */
+Versus.netBanner = function (C) {
+  const n = this.net; let msg = '', sub = '';
+  if (Net.st === 'reconnecting') { msg = 'Reconectando…'; sub = 'Partida parada · ' + Math.max(0, Math.ceil((Net.GRACE_MS - (Net.now() - Net.rcAt)) / 1000)) + ' s'; }
+  else if (!this.over && this.ticks - (n.remoteUpto + 1) >= this.PRED_MAX - 3) { msg = 'Aguardando o oponente…'; }
+  if (!msg) return;
+  const y = L.by + L.bh * 0.42, w = Math.min(L.bw, C * 9);
+  ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(L.bx + (L.bw - w) / 2, y - C * 1.1, w, sub ? C * 2.6 : C * 1.7);
+  txt(msg, L.bx + L.bw / 2, y, C * 0.7, '#ffd166', 'center', '700'); if (sub) txt(sub, L.bx + L.bw / 2, y + C * 0.95, C * 0.5, 'rgba(255,255,255,.8)', 'center', '600');
 };
 Versus.attachNote = function (t) { if (G && G.versus && !Versus.net) { G.note = { t, ttl: 1.2 }; return true; } return false; };
 

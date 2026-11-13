@@ -58,6 +58,24 @@ public class LanNetTest {
         check(true, "segundo cliente é recusado");
         // 5) conexão a porta fechada gera erro
         Peer c5 = new Peer(udp); c5.net.join("127.0.0.1", 1); c5.waitEvent("error", 6000); check(true, "erro ao conectar em porta fechada");
+        // 5b) retomada: depois que a conexão cai, o anfitrião reabre a porta com listen() (sem anunciar) e o cliente volta a conectar; linhas voltam a fluir
+        Peer hr = new Peer(udp), cr = new Peer(udp);
+        hr.net.broadcastTargets = Arrays.asList(InetAddress.getByName("127.0.0.1"));
+        hr.net.host("HR", 0); int pr = portOf(hr.waitEvent("hosting", 3000));
+        cr.net.join("127.0.0.1", pr); hr.waitEvent("connected", 3000); cr.waitEvent("connected", 3000);
+        cr.net.send("antes"); check("antes".equals(hr.lines.poll(3, TimeUnit.SECONDS)), "linha antes da queda");
+        cr.net.close(); hr.waitEvent("closed", 3000);
+        hr.events.clear();
+        hr.net.listen(pr); hr.waitEvent("hosting", 3000);
+        Peer cr2 = new Peer(udp); cr2.net.join("127.0.0.1", pr);
+        hr.waitEvent("connected", 3000); cr2.waitEvent("connected", 3000);
+        hr.net.send("volta-host"); cr2.net.send("volta-cli");
+        check("volta-host".equals(cr2.lines.poll(3, TimeUnit.SECONDS)) && "volta-cli".equals(hr.lines.poll(3, TimeUnit.SECONDS)), "listen(): conexão retomada na mesma porta e linhas fluem");
+        Peer sx = new Peer(udp); sx.net.scan(1500); Thread.sleep(300);
+        Peer hq = new Peer(udp); hq.net.broadcastTargets = Arrays.asList(InetAddress.getByName("127.0.0.1"));
+        hq.net.listen(0); int pq = portOf(hq.waitEvent("hosting", 3000));
+        sx.waitEvent("scanDone", 4000); boolean anunciou = false; for (String e : sx.events) if (e.contains("found")) anunciou = true;
+        check(!anunciou && pq > 0, "listen() não anuncia a sala por broadcast");
         // 6) descoberta por broadcast (loopback)
         Peer h6 = new Peer(udp), s6 = new Peer(udp);
         h6.net.broadcastTargets = Arrays.asList(InetAddress.getByName("127.0.0.1"));

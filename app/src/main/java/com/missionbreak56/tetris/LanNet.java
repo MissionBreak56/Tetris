@@ -128,7 +128,12 @@ public final class LanNet {
     private static Thread daemon(Runnable r, String name) { Thread t = new Thread(r, name); t.setDaemon(true); return t; }
 
     /* ------------------------------------------------------------------ host */
-    public void host(final String name, final int port) {
+    public void host(final String name, final int port) { hostImpl(name, port, true); }
+
+    /** Reabre a porta SEM anunciar a sala (broadcast): usado pelo anfitrião para o cliente retomar uma partida em andamento depois de uma queda. */
+    public void listen(final int port) { hostImpl("", port, false); }
+
+    private void hostImpl(final String name, final int port, final boolean announce) {
         final int g;
         synchronized (lock) { closeLocked(); g = ++gen; }
         daemon(new Runnable() {
@@ -141,7 +146,7 @@ public final class LanNet {
                     synchronized (lock) { if (g != gen) { ss.close(); return; } server = ss; }
                     final int p = ss.getLocalPort();
                     emit("{\"e\":\"hosting\",\"ip\":" + q(localIp()) + ",\"ips\":" + localIpsJson() + ",\"port\":" + p + "}");
-                    startAnnouncer(g, name, p);
+                    if (announce) startAnnouncer(g, name, p);
                     Socket s = ss.accept();
                     synchronized (lock) {
                         if (g != gen) { s.close(); return; }

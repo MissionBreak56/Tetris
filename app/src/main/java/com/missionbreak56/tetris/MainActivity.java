@@ -91,6 +91,7 @@ public class MainActivity extends Activity {
         }
         // ---- Rede local (modo online) ----
         @JavascriptInterface public void lanHost(String name, int port) { lock(true); wifiLowLatency(true); lan().host(name, port); }
+        @JavascriptInterface public void lanListen(int port) { lock(true); wifiLowLatency(true); lan().listen(port); }   // retomada de partida: reabre a porta sem anunciar
         @JavascriptInterface public void lanScan() { lock(true); lan().scan(4000); }
         @JavascriptInterface public void lanJoin(String ip, int port) { lock(false); wifiLowLatency(true); lan().join(ip, port); }
         @JavascriptInterface public void lanSend(String line) { lan().send(line); }

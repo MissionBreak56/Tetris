@@ -22,7 +22,7 @@ A porta TCP 47600 precisa estar liberada na VPN (por padrão está).
 ## Ping
 No lobby e durante a partida os aparelhos trocam `p`/`pong` com carimbo de tempo e medem o RTT (mediana das últimas 12 medidas), mostrado no lobby e no topo da partida.
 Não há mais "atraso de entrada" fixo: o ping só afeta o quão rápido você *vê* as jogadas do oponente (≈ RTT/2) e quantas correções ocorrem.
-Acima de ~500 ms de ida o jogo espera o oponente (janela de previsão) — mesmo assim nunca dessincroniza.
+Acima de ~750 ms de ida o jogo espera o oponente (janela de previsão) e mostra "Aguardando o oponente…" — mesmo assim nunca dessincroniza.
 
 ## Tela
 No online **cada jogador vê só a sua tela**, em tela cheia, igual ao modo solo (tabuleiro grande, Hold, Next, pontuação, mensagens de TETRIS/T-SPIN/COMBO e os mesmos gestos).
@@ -35,26 +35,32 @@ O Versus local (contra a IA ou dois jogadores no mesmo aparelho) continua com a 
 ## Arquitetura
 - **Camada de rede** (`LanNet.java`, Java puro, testado na JVM): anfitrião = `ServerSocket` TCP 47600 + anúncio por broadcast UDP (47601)
   até alguém conectar; cliente = `scan` (escuta anúncios) ou `join` por IP. Uma única conexão; mensagens em **linhas UTF-8**
-  (limite 16 KB; excedeu = conexão fechada). `MainActivity` expõe `lanHost/lanScan/lanJoin/lanSend/lanClose/lanIp` ao JavaScript
+  (limite 16 KB; excedeu = conexão fechada). `listen(porta)` reabre a porta **sem anunciar a sala** (usado na retomada de partida). `MainActivity` expõe `lanHost/lanListen/lanScan/lanJoin/lanSend/lanClose/lanIp` ao JavaScript
   e mantém um `MulticastLock` durante a busca.
-- **Protocolo** (`js/net.js`, versão 3, JSON por linha): `hello{p,eng,name}` / `nack` / `start{seed}` / `again` / `in{u,e}` / `h{t,h}` / `p{t}` / `pong{t}` / `bye`.
+- **Protocolo** (`js/net.js`, versão 4, JSON por linha): `hello{p,eng,name}` / `nack` / `start{seed,sid}` / `again` / `in{s,a,u,e}` / `rs{a}` / `resume{p,eng,sid,a}` / `h{t,h}` / `p{t}` / `pong{t}` / `bye`.
   Nada além de `hello` é aceito antes do aperto de mão; valores são validados (inteiros, limites, nomes sanitizados). Versão de protocolo diferente é recusada.
 - **Sincronização por previsão com correção (rollback)** — latência dos seus comandos ≈ 0:
   os dois aparelhos simulam **os dois tabuleiros** com a mesma semente (motor determinístico, ver replays). Suas ações valem **no próximo tick**
   (≤ 16 ms) e são enviadas **no instante do toque**. O tabuleiro do oponente é *previsto* sem ação nova; quando uma ação dele chega com tick
   já simulado, o jogo volta ao *snapshot* daquele tick e re-simula em silêncio até o presente (sem repetir som/efeitos). A mensagem `in`
-  carrega as ações novas e a promessa monotônica `u` ("não haverá ação minha antes do tick u+1"). Janela: o jogo só prevê até 30 ticks (≈ 0,5 s)
-  além do que o oponente já confirmou (depois espera) e guarda 40 snapshots. Custo medido: ~0,3–1 ms por correção com latências de rede local.
+  carrega as ações novas e a promessa monotônica `u` ("não haverá ação minha antes do tick u+1"). Janela: o jogo só prevê até 45 ticks (≈ 0,75 s)
+  além do que o oponente já confirmou (depois espera) e guarda 70 snapshots. Custo medido: ~0,3–1 ms por correção com latências de rede local.
 - **Fim de partida confirmado**: derrota/vitória só vale quando todas as ações anteriores ao fim são conhecidas; o estado final vem do snapshot
   do tick do fim, idêntico nos dois aparelhos (um topo "previsto" que depois some com uma ação atrasada é desfeito).
 - **Detecção de divergência**: a cada 120 ticks cada lado envia o hash do estado **confirmado** (o grid entra só como ocupação 0/1: as cores vêm do tema de cada aparelho e podem diferir) (a partir dos snapshots) dos dois tabuleiros;
   hash diferente encerra a partida ("dessincronizaram") sem registrar estatística. Mensagens inválidas, fora de ordem ou além da janela também abortam.
-- **Queda de conexão**: sem mensagens por 7 s (ou soquete fechado) o outro lado vence. `p`/`pong` a cada ~0,5 s (lobby) / ~1 s (partida) medem o ping mostrado na tela.
+- **Reconexão automática (queda no meio da partida)**: soquete fechado ou 5 s sem receber nada **não é mais derrota**. Os dois lados entram em "Reconectando…"
+  (o jogo fica parado nos dois, com contagem regressiva na tela) por até **20 s**: o anfitrião reabre a porta com `listen` (sem anunciar) e o cliente tenta
+  conectar de novo a cada 1 s. Ao reconectar trocam `resume{sid,a}` (`sid` = identificador secreto da sessão, gerado pelo anfitrião em `start`; conexões de outra
+  sessão/aparelho são ignoradas) e cada um **reenvia só as mensagens `in` que o outro não recebeu**. Cada `in` tem número de sequência `s` e confirma `a` (última do oponente
+  recebida): duplicatas são ignoradas, uma lacuna pede `rs{a}` (reenvio) e o registro de envio é aparado pelas confirmações. Durante a queda só `SOFT_OFF` é aceito
+  (nenhuma entrada acumula e a queda suave não fica presa). Passou de 20 s: partida interrompida **sem vencedor**. `bye` (sair/desistir de propósito) continua dando a vitória na hora.
+  App em segundo plano/tela apagada (relógio parado > 3 s) não é confundido com queda. `p`/`pong` a cada ~0,5 s (lobby) / ~1 s (partida) medem o ping mostrado na tela.
 - **Baixa latência no Android**: `TCP_NODELAY` + `IPTOS_LOWDELAY`, e `WifiLock` em modo de baixa latência (`WIFI_MODE_FULL_LOW_LATENCY`, Android 10+; `HIGH_PERF` antes)
   enquanto houver sala/partida (permissão `WAKE_LOCK`).
 - **Resultado**: modo 10 ("Online (rede local)") nas estatísticas/conquistas do perfil local; fora do ranking oficial e sem replay.
 
 ## Testes
 `tests/net.test.js` simula dois aparelhos com uma rede falsa (latência 0 a 25 quadros, jitter, corte, adulteração, mensagens inválidas, desistência,
-revanche) e compara cada partida com uma **simulação de referência offline** alimentada pelo registro real das ações (mesmo hash final, mesmos ticks e vencedor); `tests/java/LanNetTest.java` testa sockets, ordem, UTF-8, limite de linha, recusa do segundo cliente,
+revanche, **quedas e reconexões aleatórias com mensagens perdidas**) e compara cada partida com uma **simulação de referência offline** alimentada pelo registro real das ações (mesmo hash final, mesmos ticks e vencedor); `tests/java/LanNetTest.java` testa sockets, ordem, UTF-8, limite de linha, recusa do segundo cliente,
 descoberta UDP e erros (roda no CI).
