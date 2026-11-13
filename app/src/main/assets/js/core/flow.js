@@ -14,7 +14,7 @@ function startGame(mode,opts){
   const cd=$('count'); cd.style.display='flex';
   const step=()=>{
     if(n>0){ cd.textContent=n; restartAnim(cd,'cpop'); sfx.tick(); n--; setTimeout(step,650); }
-    else { cd.style.display='none'; state='PLAY'; startMusic(); }
+    else { cd.style.display='none'; state='PLAY'; startMusic(true); }
   }; step();
 }
 function gameOver(reason){

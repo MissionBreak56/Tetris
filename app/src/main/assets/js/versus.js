@@ -48,7 +48,7 @@ const Versus = {
     this.create(cfg); this.active = true;
     $('pauseBtn').style.display = 'flex';
     let n = 3; state = 'COUNT'; const cd = $('count'); cd.style.display = 'flex';
-    const step = () => { if (n > 0) { cd.textContent = n; restartAnim(cd, 'cpop'); sfx.tick(); n--; setTimeout(step, 650); } else { cd.style.display = 'none'; state = 'VERSUS'; startMusic(); } };
+    const step = () => { if (n > 0) { cd.textContent = n; restartAnim(cd, 'cpop'); sfx.tick(); n--; setTimeout(step, 650); } else { cd.style.display = 'none'; state = 'VERSUS'; startMusic(true); } };
     step();
   },
   stop() { this.active = false; this.touch = [null, null]; if (this.net) { this.net = null; Net.disconnect(); } },

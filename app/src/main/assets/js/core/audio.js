@@ -1,7 +1,7 @@
 'use strict';
 /* Áudio (WebAudio): efeitos e música procedural, volumes por categoria. */
 /* ================= ÁUDIO (WebAudio) ================= */
-let AC=null, musicTimer=null, musicStep=0;
+let AC=null, musicTimer=null;
 function ac(){ if(!AC) AC=new (window.AudioContext||window.webkitAudioContext)(); if(AC.state==='suspended'&&AC.resume) AC.resume(); return AC; }
 function tone(f,d,type,vol,slide,cat){
   const music=cat==='music';
@@ -30,18 +30,22 @@ const sfx={
   tick:()=>tone(880,.1,'square',.12),
   skill:()=>{[660,880,1100].forEach((f,i)=>setTimeout(()=>tone(f,.1,'triangle',.12),i*80));}
 };
-const MELODY=[440,0,523,0,659,0,523,0,440,0,392,0,330,0,392,0,
-              440,0,523,0,659,0,784,0,659,0,523,0,440,0,0,0];
-const BASS=[110,0,0,0,131,0,0,0,110,0,0,0,98,0,131,0];
-function startMusic(){
-  stopMusic(); if(!settings.music) return;
-  musicTimer=setInterval(()=>{
-    if(state!=='PLAY') return;
-    const m=MELODY[musicStep%MELODY.length], b=BASS[musicStep%BASS.length];
-    if(m) tone(m,.15,'square',.05,0,'music');
-    if(b) tone(b,.15,'triangle',.06,0,'music');
-    musicStep++;
-  },160);
+/* Música de fundo: biblioteca em js/music.js (várias músicas no mesmo estilo; o andamento sobe um pouco a cada nível). */
+function musicTick(){
+  musicTimer=null; if(!settings.music) return;
+  const ms=Music.stepMs(G&&G.level);
+  if(state==='PLAY'){
+    const s=Music.step(), d=ms*0.9375/1000;                 // nota de 15/16 do passo (como a original: 0,15 s em 160 ms)
+    if(s.m) tone(s.m,d,'square',.05,0,'music');
+    if(s.b) tone(s.b,d,'triangle',.06,0,'music');
+  }
+  musicTimer=setTimeout(musicTick,ms);
 }
-function stopMusic(){ if(musicTimer){clearInterval(musicTimer);musicTimer=null;} }
+/** fresh=true: partida nova (escolhe a próxima música); sem argumento: retoma de onde parou (pausa). */
+function startMusic(fresh){
+  stopMusic(); if(!settings.music) return;
+  if(fresh||!Music.cur) Music.begin();
+  musicTimer=setTimeout(musicTick,Music.stepMs(G&&G.level));
+}
+function stopMusic(){ if(musicTimer){clearTimeout(musicTimer);musicTimer=null;} }
 function vib(ms){ if(settings.vib && navigator.vibrate) navigator.vibrate(ms); }
