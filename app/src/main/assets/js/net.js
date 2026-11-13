@@ -17,7 +17,7 @@ const Lan = {
 // Faixas aceitas: redes privadas (RFC1918 + link-local) e de VPN (Tailscale/CGNAT 100.64–127.x e Hamachi 25.x).
 const PRIVATE_NET = /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}|25\.\d{1,3}\.\d{1,3}\.\d{1,3})$/;
 const Net = {
-  PROTO: 2, PORT: 47600, MAX_LINE: 16384, HS_MS: 5000, DEAD_MS: 7000, HASH_EVERY: 120,
+  PROTO: 3, PORT: 47600, MAX_LINE: 16384, HS_MS: 5000, DEAD_MS: 7000, HASH_EVERY: 120,
   T: null, role: null, sentU: -1, st: 'idle', peer: null, hosts: [], ip: '', ips: [], rtts: [], hbN: 0, err: '', lastRx: 0, hsAt: 0, lastSend: 0, lastSentTick: -9, timer: null, onChange: null, name: '', info: '',
   now() { return Date.now(); },
   tr() { return this.T || Lan; },

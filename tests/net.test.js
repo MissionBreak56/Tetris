@@ -56,7 +56,7 @@ test('conexão: aperto de mão leva os dois ao lobby com os nomes do oponente', 
   assert.equal(P.T.a.hosted[1], 47600); assert.deepEqual(P.T.b.joined, ['192.168.0.5', 47600]);
 });
 test('conexão: versão do protocolo ou do motor diferente é recusada com mensagem', () => {
-  for (const bad of [{ p: 1, eng: 'E2' }, { p: 2, eng: 'E1' }]) {
+  for (const bad of [{ p: 2, eng: 'E2' }, { p: 3, eng: 'E1' }]) {
     const h = load(1); const fake = { available: () => true, host() {}, scan() {}, join() {}, close() { this.closed = true; }, send(l) { this.out.push(l); }, out: [] };
     h.sb.__T = fake; h.run('Net.T=__T'); NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
     NetOf(h)._line(JSON.stringify(Object.assign({ k: 'hello', name: 'X' }, bad)));
@@ -69,13 +69,13 @@ test('conexão: mensagens malformadas, grandes ou antes do hello são ignoradas'
   NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
   for (const junk of ['', 'x', '[]', '5', 'null', '{"k":5}', '{"k":"start","seed":1}', '{"k":"in","u":1,"e":[]}', 'x'.repeat(20000), '{"k":"hello","p":1,"eng":"E2"' ]) NetOf(h)._line(junk);
   assert.equal(NetOf(h).st, 'handshake'); assert.equal(NetOf(h).peer, null);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 2, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 3, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
   assert.equal(NetOf(h).st, 'lobby'); assert.ok(!/[<>\n]/.test(NetOf(h).peer.name) && NetOf(h).peer.name.length <= 16);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 2, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 3, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
 });
 test('conexão: nome igual ao seu recebe sufixo; tempo esgotado no aperto de mão desconecta', () => {
   const h = load(1); h.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; h.run('Net.T=__T');
-  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 2, eng: 'E2', name: 'Jogador 1' }));
+  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 3, eng: 'E2', name: 'Jogador 1' }));
   assert.equal(NetOf(h).peer.name, 'Jogador 1 (2)');
   const g = load(1); g.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; g.run('Net.T=__T');
   NetOf(g).host(); NetOf(g)._ev({ e: 'connected' }); let t = Date.now(); NetOf(g).now = () => t; NetOf(g).hsAt = t; t += 6000; NetOf(g).heartbeat();
@@ -315,6 +315,19 @@ test('lixo/ataques e níveis diferentes salvos nos aparelhos não divergem (com 
   logInputs(startMatch(P)); playOut(P, 33); const a = V(P.A);
   assert.deepEqual(plain(a.sent), plain(V(P.B).sent)); assert.deepEqual(plain(a.pend), plain(V(P.B).pend));
   assert.equal(a.snapHash(a.snap()), reference(P, a.cfg.seed).hash);
+});
+
+test('temas/paletas de peças diferentes nos dois aparelhos não causam "dessincronizaram" (hash independe de cor)', () => {
+  for (const seed of [31, 32, 33]) {
+    const P = pair({ lat: 3, jitter: 2, seed });
+    P.A.run("Object.assign(COLORS, { I: '#00e5ff', J: '#3a6bff', L: '#ff9f1c', O: '#ffe066', S: '#3ddc84', T: '#b266ff', Z: '#ff4d6d' })");
+    P.B.run("Object.assign(COLORS, { I: '#111111', J: '#222222', L: '#333333', O: '#444444', S: '#555555', T: '#666666', Z: '#777777' })");
+    logInputs(startMatch(P)); playOut(P, seed * 7);
+    const a = V(P.A), b = V(P.B);
+    assert.equal(a.result.aborted, undefined, 'A seed ' + seed + ': ' + (a.result.reason || '')); assert.equal(b.result.aborted, undefined, 'B seed ' + seed + ': ' + (b.result.reason || ''));
+    assert.equal(a.result.ticks, b.result.ticks); assert.equal(a.result.winner, b.result.winner);
+    assert.ok(a.result.ticks > 120, 'passou do 1º ponto de checagem de hash (ticks=' + a.result.ticks + ')');
+  }
 });
 
 /* ======== Online em tela cheia (cada jogador vê só a sua tela) ======== */

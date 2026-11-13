@@ -37,7 +37,7 @@ O Versus local (contra a IA ou dois jogadores no mesmo aparelho) continua com a 
   até alguém conectar; cliente = `scan` (escuta anúncios) ou `join` por IP. Uma única conexão; mensagens em **linhas UTF-8**
   (limite 16 KB; excedeu = conexão fechada). `MainActivity` expõe `lanHost/lanScan/lanJoin/lanSend/lanClose/lanIp` ao JavaScript
   e mantém um `MulticastLock` durante a busca.
-- **Protocolo** (`js/net.js`, versão 2, JSON por linha): `hello{p,eng,name}` / `nack` / `start{seed}` / `again` / `in{u,e}` / `h{t,h}` / `p{t}` / `pong{t}` / `bye`.
+- **Protocolo** (`js/net.js`, versão 3, JSON por linha): `hello{p,eng,name}` / `nack` / `start{seed}` / `again` / `in{u,e}` / `h{t,h}` / `p{t}` / `pong{t}` / `bye`.
   Nada além de `hello` é aceito antes do aperto de mão; valores são validados (inteiros, limites, nomes sanitizados). Versão de protocolo diferente é recusada.
 - **Sincronização por previsão com correção (rollback)** — latência dos seus comandos ≈ 0:
   os dois aparelhos simulam **os dois tabuleiros** com a mesma semente (motor determinístico, ver replays). Suas ações valem **no próximo tick**
@@ -47,7 +47,7 @@ O Versus local (contra a IA ou dois jogadores no mesmo aparelho) continua com a 
   além do que o oponente já confirmou (depois espera) e guarda 40 snapshots. Custo medido: ~0,3–1 ms por correção com latências de rede local.
 - **Fim de partida confirmado**: derrota/vitória só vale quando todas as ações anteriores ao fim são conhecidas; o estado final vem do snapshot
   do tick do fim, idêntico nos dois aparelhos (um topo "previsto" que depois some com uma ação atrasada é desfeito).
-- **Detecção de divergência**: a cada 120 ticks cada lado envia o hash do estado **confirmado** (a partir dos snapshots) dos dois tabuleiros;
+- **Detecção de divergência**: a cada 120 ticks cada lado envia o hash do estado **confirmado** (o grid entra só como ocupação 0/1: as cores vêm do tema de cada aparelho e podem diferir) (a partir dos snapshots) dos dois tabuleiros;
   hash diferente encerra a partida ("dessincronizaram") sem registrar estatística. Mensagens inválidas, fora de ordem ou além da janela também abortam.
 - **Queda de conexão**: sem mensagens por 7 s (ou soquete fechado) o outro lado vence. `p`/`pong` a cada ~0,5 s (lobby) / ~1 s (partida) medem o ping mostrado na tela.
 - **Baixa latência no Android**: `TCP_NODELAY` + `IPTOS_LOWDELAY`, e `WifiLock` em modo de baixa latência (`WIFI_MODE_FULL_LOW_LATENCY`, Android 10+; `HIGH_PERF` antes)

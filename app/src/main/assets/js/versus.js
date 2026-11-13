@@ -261,8 +261,11 @@ Versus.netRecv = function (m) {
   if (minT < this.ticks) n.rb = n.rb == null ? minT : Math.min(n.rb, minT);       // ação do passado: corrigir no início do próximo quadro
   n.remoteUpto = m.u;
 };
+/** Hash de sincronia: o grid entra só como OCUPAÇÃO (0/1). As cores das células vêm do tema/paleta de cada aparelho e podem ser diferentes entre os dois
+    jogadores — não fazem parte da simulação (antes, temas diferentes causavam "dessincronizaram" já no 1º hash, tick 120). */
+Versus.gridKey = function (grid) { return grid.map((r) => r.map((c) => (c ? 1 : 0)).join('')); };
 Versus.snapHash = function (s) {
-  return fnv(JSON.stringify([s.B.map((b) => [b.grid, Math.round(b.score), b.lines, b.level, b.tick, b.active && b.active.t, b.active && b.active.x, b.active && b.active.y, b.held, b.queue.slice(0, 3)]), s.pend, s.sent]));
+  return fnv(JSON.stringify([s.B.map((b) => [this.gridKey(b.grid), Math.round(b.score), b.lines, b.level, b.tick, b.active && b.active.t, b.active && b.active.x, b.active && b.active.y, b.held, b.queue.slice(0, 3)]), s.pend, s.sent]));
 };
 Versus.netRecvHash = function (m) {
   const n = this.net; if (!Number.isInteger(m.t) || typeof m.h !== 'string' || m.h.length > 16) return;
