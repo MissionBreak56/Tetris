@@ -51,3 +51,5 @@ function showMsg2(t){ if(SIM) return; if(Versus.attachNote(t)) return; const m=$
 /* ================= INIT ================= */
 applyTheme(); initBG(); resize(); addEventListener('resize',resize);
 refreshMenu(); requestAnimationFrame(loop);
+/* Revela a interface só depois do tema + layout + 1º quadro desenhado (o loop acima roda antes neste mesmo quadro): sem "piscar" de botões empilhados na cor padrão. */
+requestAnimationFrame(()=>{ const d=document.documentElement; if(d.classList) d.classList.remove('boot'); });

@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="boot">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Tetris</title>
+<script>setTimeout(function(){document.documentElement.classList.remove('boot')},4000)</script>
 <style>
   :root{--acc:#6aa3ff;--glow:61,120,255;--dk:18,40,170;--btnbg:8,16,70;--b1:#2f58e6;--b2:#1a2f9e;--bg1:#2433b8;--bg2:#04051f;--ov:3,5,35;--cell:40px;--p1:12,20,86;--p2:5,10,53;--ink:#ffffff;--dim:#9fb4ee;--val:#ffd54a}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
@@ -15,6 +16,9 @@
   .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
     background:rgba(var(--ov),.78);z-index:20;touch-action:manipulation}
   .overlay.on{display:flex}
+  /* Partida do app: nada de interface (botões empilhados, cor padrão) até o layout, o tema e o 1º quadro estarem prontos — removido em core/app.js */
+  html.boot,html.boot body{background:#000}
+  html.boot #menu,html.boot #menu.on{display:none}
   .overlay.on .panel{animation:popin .28s cubic-bezier(.2,1.4,.4,1)}
   @keyframes popin{from{transform:scale(.75);opacity:0}to{transform:scale(1);opacity:1}}
   .panel{background:linear-gradient(rgba(var(--p1),.93),rgba(var(--p2),.93));color:var(--ink);border:3px solid var(--acc);
