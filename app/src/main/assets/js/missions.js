@@ -48,4 +48,4 @@ function openMissions() {
     });
   });
 }
-Hub.add(50, 'Missões', openMissions);
+Hub.add(50, 'Missões', openMissions, 'progress');

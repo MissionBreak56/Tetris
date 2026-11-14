@@ -48,4 +48,4 @@ function openAchievements() {
     });
   });
 }
-Hub.add(40, 'Conquistas', openAchievements);
+Hub.add(40, 'Conquistas', openAchievements, 'progress');

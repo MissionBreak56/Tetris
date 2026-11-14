@@ -56,4 +56,4 @@ function openRanking(sel, all) {
     if (!all && list.length) b.appendChild(btn('Limpar ranking', () => Confirm.ask('Apagar o ranking do perfil ' + me.name + '? (os outros perfis não são afetados)', () => { Ranking.clearProfile(me.id); Sheet.refresh(); }), 'danger'));
   });
 }
-Hub.add(35, 'Ranking local', () => openRanking());
+Hub.add(35, 'Ranking local', () => openRanking(), 'progress');

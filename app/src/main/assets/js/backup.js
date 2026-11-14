@@ -124,4 +124,4 @@ function openBackupImport() {
     b.appendChild(out); b.appendChild(sum);
   });
 }
-Hub.add(80, 'Backup e restauração', openBackup);
+Hub.add(80, 'Backup e restauração', openBackup, 'data');

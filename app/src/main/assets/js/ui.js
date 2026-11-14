@@ -45,10 +45,17 @@ const Confirm = {
 };
 const Hub = {
   items: [],
-  add(order, label, open) { this.items.push({ order, label, open }); },
+  /** Grupos do menu, na ordem em que aparecem. */
+  groups: [{ id: 'custom', title: 'PERSONALIZAR' }, { id: 'progress', title: 'PROGRESSO' }, { id: 'data', title: 'CONTA E DADOS' }],
+  add(order, label, open, group) { this.items.push({ order, label, open, group: group || 'custom' }); },
   open() {
-    Sheet.open('Menu', (b) => {
-      this.items.slice().sort((a, c) => a.order - c.order).forEach((it) => b.appendChild(btn(it.label, it.open)));
+    Sheet.open('Ajustes', (b) => {
+      const sorted = this.items.slice().sort((a, c) => a.order - c.order);
+      this.groups.forEach((g) => {
+        const its = sorted.filter((it) => it.group === g.id); if (!its.length) return;
+        b.appendChild(sec(g.title));
+        b.appendChild(h('div', { class: 'grid2' }, its.map((it) => btn(it.label, it.open))));
+      });
     });
   },
 };

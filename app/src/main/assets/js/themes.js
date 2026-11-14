@@ -189,4 +189,4 @@ function openThemeImport() {
     b.appendChild(btn('Importar', () => { const r = Theme.importJSON(ta.value); if (r.ok) { out.textContent = '✓ Tema importado'; out.className = 'errs ok'; } else { out.textContent = r.errors.join(' · '); out.className = 'errs'; } }));
   });
 }
-Hub.add(52, 'Temas', openThemes);
+Hub.add(52, 'Temas', openThemes, 'custom');

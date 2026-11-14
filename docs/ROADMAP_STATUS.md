@@ -14,7 +14,7 @@
 | 14–15 | Desafio diário determinístico, missões e recompensas idempotentes | `js/daily.js`, `js/missions.js` |
 | 16–17 | Skins e editor de temas com validação de contraste | `js/skins.js`, `js/themes.js` |
 | 18 | Perfis (p1 mantém as chaves antigas) | `js/profiles.js` |
-| 19 | PPS/APM/tendência; camada única de ações; passo fixo | `js/analysis.js`, `js/actions.js` |
+| 19 | Camada única de ações; passo fixo (a tela de Análises PPS/APM foi removida do menu) | `js/actions.js` |
 | 20 | Ranking local por perfil (só modos oficiais; top 10 de cada perfil) | `js/ranking.js` |
 | 21–22 | Replays determinísticos, export/import, ponte Android | `js/replay.js`, `js/native.js`, `MainActivity.java` |
 | 23 | Modularização + arquitetura | `js/core/*`, `docs/ARCHITECTURE.md` |

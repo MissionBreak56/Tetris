@@ -23,6 +23,7 @@ function layoutMenu(){
   $('menu').style.setProperty('--cell',C+'px');
   const place=(id,x,y,w,h)=>{ const e=$(id).style; e.left=Math.round(x)+'px'; e.top=Math.round(y)+'px'; e.width=Math.round(w)+'px'; e.height=Math.round(h)+'px'; };
   place('bLevel',bx+7.75*C,by+.45*C,1.85*C,1.85*C);
+  place('bStartLvl',bx+5.75*C,by+.45*C,1.85*C,1.85*C);       // nível inicial: ao lado do botão de ajustes
   const mx=bx+.9*C, mw=8.2*C, mh=1.75*C, g1=.22*C;           // 3 modos principais (como na foto, só mais baixos)
   place('bMarathon',mx,by+9.2*C,mw,mh); place('bTimed',mx,by+9.2*C+mh+g1,mw,mh); place('bStrategy',mx,by+9.2*C+2*(mh+g1),mw,mh);
   const y0=by+9.2*C+3*(mh+g1)+.1*C, h2=1.05*C, g2=.17*C, cw=(mw-g2)/2;   // grade 2 colunas com os demais modos

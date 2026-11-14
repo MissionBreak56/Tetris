@@ -44,4 +44,4 @@ function openStats(sel) {
     statsRows(sel === 'all' ? s.all : Object.assign(StatsMgr.blank(), s.modes[sel] || {})).forEach((r) => b.appendChild(r));
   });
 }
-Hub.add(20, 'Estatísticas', () => openStats());
+Hub.add(20, 'Estatísticas', () => openStats(), 'progress');

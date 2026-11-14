@@ -2,7 +2,7 @@
 /* Ligação da interface (botões da tela inicial, folhas) e inicialização. */
 /* ================= UI ================= */
 function refreshMenu(){
-  const lb=$('lvBadge'); lb.textContent=settings.startLevel; lb.classList.toggle('on',settings.startLevel>1);
+  $('lvNum').textContent=settings.startLevel;
   const tv=$('tVib'); if(tv) tv.textContent='Vibrar: '+(settings.vib?'ON':'OFF');
   { const d=Daily.load()[Daily.dateKey()], done=!!(d&&d.done); $('bDaily').textContent='DAILY'+(done?' ✓':''); $('bDaily').classList.toggle('done',done); }
   $('tGhost').classList.toggle('off',!settings.ghost);
@@ -24,13 +24,13 @@ $('bLevel').onclick=()=>{sfx.click();Hub.open();};
 $('sheetBack').onclick=()=>{sfx.click();Sheet.back();};
 $('bTheme').onclick=()=>{const ids=Theme.ids(), i=ids.indexOf(settings.theme); settings.theme=ids[(i+1)%ids.length]; saveSettings(); applyTheme(); sfx.click();};
 function openLevelSheet(){
-  Sheet.push('Nível inicial',(b)=>{
+  Sheet.open('Nível inicial',(b)=>{
     const g=h('div',{class:'grid'});
     for(let i=1;i<=30;i++) g.appendChild(btn(String(i),()=>{settings.startLevel=i;saveSettings();refreshMenu();Sheet.back();}));
     b.appendChild(g);
   });
 }
-Hub.add(10,'Nível inicial',openLevelSheet);
+$('bStartLvl').onclick=()=>{sfx.click();openLevelSheet();};
 $('tGhost').onclick=()=>{settings.ghost=!settings.ghost;saveSettings();refreshMenu();sfx.click();};
 $('tMusic').onclick=()=>{settings.music=!settings.music;saveSettings();refreshMenu();sfx.click();if(!settings.music)stopMusic();};
 $('tSound').onclick=()=>{settings.sound=!settings.sound;saveSettings();refreshMenu();sfx.click();};

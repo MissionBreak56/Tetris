@@ -84,4 +84,4 @@ function openHistoryDetail(e) {
       kv('Maior combo', e.cb == null ? '—' : e.cb), kv('Resultado', e.w ? 'Objetivo cumprido' : '—')].forEach((r) => b.appendChild(r));
   });
 }
-Hub.add(30, 'Histórico', () => openHistory());
+Hub.add(30, 'Histórico', () => openHistory(), 'progress');

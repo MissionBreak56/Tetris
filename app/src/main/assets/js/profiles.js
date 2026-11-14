@@ -77,4 +77,4 @@ function openProfileName(id) {
     }));
   });
 }
-Hub.add(70, 'Perfis', openProfiles);
+Hub.add(70, 'Perfis', openProfiles, 'data');

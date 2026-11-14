@@ -188,5 +188,5 @@ function openReplayImport() {
     b.appendChild(btn('Escolher arquivo…', () => Native.pickFile((t, err) => { if (err || t == null) { out.textContent = err || 'Falha ao abrir'; out.className = 'errs'; } else run(t); })));
   });
 }
-Hub.add(45, 'Replays', openReplays);
+Hub.add(45, 'Replays', openReplays, 'progress');
 Store.register('replays');

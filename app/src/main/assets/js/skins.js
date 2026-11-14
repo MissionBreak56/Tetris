@@ -79,4 +79,4 @@ function openSkins() {
     });
   });
 }
-Hub.add(55, 'Skins das peças', openSkins);
+Hub.add(55, 'Skins das peças', openSkins, 'custom');

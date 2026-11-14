@@ -14,7 +14,7 @@ function slider(label, min, max, step, get, set, fmt) {
   return h('div', { class: 'slrow' }, h('span', { text: label }), inp, out);
 }
 function openSettingsSheet() {
-  Sheet.push('Ajustes', (b) => {
+  Sheet.push('Preferências', (b) => {
     b.appendChild(toggleBtn('Vibrar', () => settings.vib, (v) => { settings.vib = v; saveSettings(); refreshMenu(); }));
     b.appendChild(toggleBtn('Efeitos visuais', () => settings.fx, (v) => { settings.fx = v; saveSettings(); }));
     b.appendChild(toggleBtn('Miniatura do oponente (online)', () => settings.oppView, (v) => { settings.oppView = v; saveSettings(); }));
@@ -48,4 +48,4 @@ function openControlsSheet() {
     b.appendChild(btn('Restaurar padrões', () => { C.reset(); resize(); Sheet.refresh(); }, 'danger'));
   });
 }
-Hub.add(15, 'Ajustes', openSettingsSheet);
+Hub.add(15, 'Preferências', openSettingsSheet, 'custom');
