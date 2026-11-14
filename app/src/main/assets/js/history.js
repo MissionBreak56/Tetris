@@ -31,12 +31,10 @@ const Results = {
   /** Grava estatísticas, histórico e recorde. Chamado UMA vez por partida (gameOver tem trava overDone). */
   commit(r) {
     if (r.mode === 9) return { tracked: false, isBest: false, prev: 0, best: 0 };   // tutorial não grava nada
-    const before = Missions.doneIds(StatsMgr.load());
     const st = StatsMgr.record(r);
     if (r.mode === 6) r.dailyRec = Daily.record(r);
     if (r.mode === 7) Custom.record(r);
     r.unlocked = Achv.check(st);
-    r.missions = Missions.doneIds(StatsMgr.load()).filter((id) => !before.includes(id)).map((id) => Missions.nameOf(id));
     History.add(this.entry(r));
     const rec = Records.update(r);
     r.rank = Ranking.submit(r);
@@ -59,8 +57,7 @@ const Results = {
     if (rec.tracked) box.appendChild(kv(sprint ? 'Melhor tempo' : 'Best Score', sprint ? (rec.best ? fmtMsP(rec.best) : '—') : fmtNum(rec.best)));
     if (r.rank) box.appendChild(h('div', { class: 'newrec', text: '🏅 ' + r.rank + 'º lugar no seu ranking' }));
     if (r.dailyRec && r.dailyRec.first) box.appendChild(h('div', { class: 'newrec', text: '📅 Desafio diário concluído! +1 ⭐' }));
-    (r.missions || []).forEach((n) => box.appendChild(h('div', { class: 'newrec', text: '🎯 Missão concluída: ' + n })));
-    (r.unlocked || []).forEach((a) => box.appendChild(h('div', { class: 'newrec', text: '🏆 Conquista: ' + a.name })));
+    (r.unlocked || []).forEach((a) => box.appendChild(h('div', { class: 'newrec', text: '🏆 Conquista: ' + a.name + (a.reward ? ' · +' + a.reward + ' ⭐' : '') })));
     if (rec.isBest) box.appendChild(h('div', { class: 'newrec', text: '★ Novo recorde' + (rec.prev ? ' (anterior: ' + (sprint ? fmtMsP(rec.prev) : fmtNum(rec.prev)) + ')' : '') }));
   },
 };

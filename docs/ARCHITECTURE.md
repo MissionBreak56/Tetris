@@ -19,7 +19,7 @@ Todo o jogo é JavaScript puro, **sem dependências**, dividido em scripts clás
 | Skins/Temas | `js/skins.js`, `js/themes.js` | `Skins.draw`, `Theme` (validação, editor, import/export) |
 | Áudio | `js/core/audio.js` | `tone(...)` por categoria (`sfx`/`music`) com volumes independentes |
 | Entrada | `js/core/input.js`, `js/controls.js` | Loop de passo fixo, teclado, gestos; `Controls` (sensibilidade/botão de pausa) |
-| Dados de jogo | `js/stats.js`, `js/history.js`, `js/achv.js`, `js/missions.js`, `js/daily.js`, `js/ranking.js` | Estatísticas, histórico/recordes/resultados, conquistas, missões, desafio diário, ranking, análises |
+| Dados de jogo | `js/stats.js`, `js/history.js`, `js/achv.js`, `js/rewards.js`, `js/daily.js`, `js/ranking.js` | Estatísticas, histórico/recordes/resultados, conquistas, missões, desafio diário, ranking, análises |
 | Replays | `js/replay.js` | `Replays` (gravar/verificar/simular/importar/exportar), `Replay` (reprodução) |
 | Modos | `js/modes.js`, `js/tutorial.js` + extras | Registro de modos (`Modes.add`), tutorial |
 | Online (LAN) | `js/net.js`, `Versus` (modo `net`), `LanNet.java` | `Net` (lobby, protocolo, lockstep), `Lan` (ponte), `LanNet` (sockets TCP + descoberta UDP). Ver `docs/ONLINE.md` |

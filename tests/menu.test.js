@@ -33,15 +33,25 @@ test('botão LEVEL abre "Nível inicial" com 30 níveis, mostra o nível escolhi
 test('menu (botão AJUSTES): sem "Nível inicial" e sem "Análises (PPS/APM)"; itens organizados em grupos', () => {
   const h = load(1), Hub = h.get('Hub'), labels = Array.from(Hub.items.map((i) => i.label));
   assert.ok(!labels.some((l) => /Nível inicial|Análises|PPS|APM/.test(l)), labels.join(','));
-  for (const l of ['Preferências', 'Temas', 'Skins das peças', 'Estatísticas', 'Histórico', 'Ranking local', 'Conquistas', 'Replays', 'Missões', 'Perfis', 'Backup e restauração']) assert.ok(labels.includes(l), l);
+  for (const l of ['Preferências', 'Temas', 'Skins das peças', 'Estatísticas', 'Histórico', 'Ranking local', 'Conquistas', 'Replays', 'Perfis', 'Backup e restauração']) assert.ok(labels.includes(l), l);
   const ids = Array.from(Hub.groups.map((g) => g.id)); for (const it of Hub.items) assert.ok(ids.includes(it.group), it.label);
   h.els.bLevel.onclick(); assert.equal(h.els.sheetTitle.textContent, 'Ajustes');
   const kids = h.els.sheetBody.children, titles = kids.filter((c) => c.className === 'sec').map((c) => c.textContent);
   assert.deepEqual(titles, ['PERSONALIZAR', 'PROGRESSO', 'CONTA E DADOS']);
   const grids = kids.filter((c) => c.className === 'grid2'); assert.equal(grids.length, 3);
-  assert.deepEqual(grids.map((g) => g.children.map((b) => b.textContent)), [['Preferências', 'Temas', 'Skins das peças'], ['Estatísticas', 'Histórico', 'Ranking local', 'Conquistas', 'Replays', 'Missões'], ['Perfis', 'Backup e restauração']]);
+  assert.deepEqual(grids.map((g) => g.children.map((b) => b.textContent)), [['Preferências', 'Temas', 'Skins das peças'], ['Estatísticas', 'Histórico', 'Ranking local', 'Conquistas', 'Replays'], ['Perfis', 'Backup e restauração']]);
   grids[0].children[0].onclick(); assert.equal(h.els.sheetTitle.textContent, 'Preferências');
 });
 test('análises: módulo e script removidos', () => {
   assert.doesNotMatch(html, /analysis\.js/); assert.equal(fs.existsSync(path.join(__dirname, '..', 'app', 'src', 'main', 'assets', 'js', 'analysis.js')), false);
+});
+test('conquistas (com as ex-missões): tela mostra desbloqueadas e estrelas, "em andamento" por progresso e "concluídas" por data', () => {
+  const h = load(1, { tetris_stats: JSON.stringify({ all: { lines: 120, games: 3, bestLevel: 4 }, modes: {} }) });
+  h.sb.openAchievements();
+  const kids = h.els.sheetBody.children, text = (c) => c.textContent || (c.children || []).map(text).join('');
+  const heads = kids.filter((c) => c.className === 'sec').map((c) => c.textContent); assert.deepEqual(heads, ['EM ANDAMENTO', 'CONCLUÍDAS']);
+  const all = kids.map(text).join('|'); assert.match(all, /Desbloqueadas/); assert.match(all, /Estrelas/);
+  assert.match(all, /Faxineiro/); assert.match(all, /recompensa: 2 ⭐/); assert.match(all, /Demolidor/);
+  const rows = kids.filter((c) => /achv/.test(c.className)), done = rows.filter((c) => /done/.test(c.className)), todo = rows.filter((c) => !/done/.test(c.className));
+  assert.equal(rows.length, h.get('Achv').defs.length); assert.equal(h.get('Achv').defs.length, 30); assert.ok(done.length >= 2 && todo.length > 10); assert.equal(h.get('Rewards').stars(), 1);
 });

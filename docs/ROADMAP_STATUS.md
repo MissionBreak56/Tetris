@@ -11,7 +11,7 @@
 | 09 | Feedback de pontuação (tipos, PERFECT CLEAR, COMBO, modo sem efeitos) | `js/core/app.js` |
 | 10 | Tutorial interativo no motor real | `js/tutorial.js` |
 | 11–13 | Zen, Sprint 40 e auditoria do Ultra (2 Minutes) | `js/rules.js`, `js/modes.js` |
-| 14–15 | Desafio diário determinístico, missões e recompensas idempotentes | `js/daily.js`, `js/missions.js` |
+| 14–15 | Desafio diário determinístico, conquistas com recompensas idempotentes (as missões foram mescladas às conquistas) | `js/daily.js`, `js/achv.js`, `js/rewards.js` |
 | 16–17 | Skins e editor de temas com validação de contraste | `js/skins.js`, `js/themes.js` |
 | 18 | Perfis (p1 mantém as chaves antigas) | `js/profiles.js` |
 | 19 | Camada única de ações; passo fixo (a tela de Análises PPS/APM foi removida do menu) | `js/actions.js` |

@@ -37,18 +37,18 @@ test('diário: mesma data => mesmas peças; datas diferentes => sequências dife
   assert.equal(seq('2026-05-05'), seq('2026-05-05'));
   assert.notEqual(seq('2026-05-05'), seq('2026-05-06'));
 });
-test('diário: concluir registra data, tentativa e concede 1 estrela uma única vez', () => {
+test('diário: concluir registra data, tentativa e concede a estrela uma única vez (e a conquista "Desafiante")', () => {
   const h = load(1);
   dailyGame(h, '2026-05-05', (o) => { o.rules = { goal: { type: 'lines', target: 1 } }; });
   clearOne(h);
   assert.equal(h.state(), 'OVER'); assert.equal(h.G().won, true);
   let d = plain(D(h).load())['2026-05-05'];
   assert.equal(d.done, true); assert.equal(d.tries, 1); assert.equal(D(h).count(), 1);
-  assert.equal(h.get('Rewards').stars(), 1);
+  assert.equal(h.get('Rewards').stars(), 2, '1 ⭐ do diário + 1 ⭐ da conquista "Desafiante"');
   dailyGame(h, '2026-05-05', (o) => { o.rules = { goal: { type: 'lines', target: 1 } }; });
   clearOne(h);
   d = plain(D(h).load())['2026-05-05'];
-  assert.equal(d.tries, 2); assert.equal(D(h).count(), 1); assert.equal(h.get('Rewards').stars(), 1, 'sem recompensa duplicada');
+  assert.equal(d.tries, 2); assert.equal(D(h).count(), 1); assert.equal(h.get('Rewards').stars(), 2, 'sem recompensa duplicada');
 });
 test('diário: o desafio fica congelado no início (virar o dia não troca a data registrada)', () => {
   const h = load(1);
@@ -78,29 +78,39 @@ test('diário: armazenamento corrompido e histórico limitado a 60 dias', () => 
   assert.equal(D(h).record({ daily: 'hack', win: true }), null);
 });
 
-/* ---- Etapa 15: missões ---- */
+/* ---- Etapa 15: recompensas e conquistas (missões mescladas) ---- */
 test('recompensas: concedidas uma única vez por id e somadas', () => {
   const R = load(1).get('Rewards');
   assert.equal(R.grant('x', 2), true); assert.equal(R.grant('x', 2), false); assert.equal(R.grant('y', 3), true);
   assert.equal(R.stars(), 5);
 });
-test('missões: progresso derivado das estatísticas, limitado à meta; resgate só quando concluída e uma vez', () => {
+test('conquistas com recompensa (ex-missões): estrelas concedidas sozinhas ao desbloquear, uma única vez', () => {
   const h = load(1, { tetris_stats: JSON.stringify({ all: { lines: 120, games: 3 }, modes: {} }) });
-  const M = h.get('Missions'), S = h.get('StatsMgr');
-  const p = Object.fromEntries(plain(M.progress(S.load())).map((m) => [m.id, m]));
-  assert.equal(p.m_lines_100.done, true); assert.equal(p.m_lines_100.value, 100); assert.equal(p.m_lines_500.done, false); assert.equal(p.m_lines_500.value, 120);
-  assert.equal(M.claim('m_lines_500'), false); assert.equal(M.claim('m_lines_100'), true); assert.equal(M.claim('m_lines_100'), false);
-  assert.equal(h.get('Rewards').stars(), 1);
-  assert.equal(M.claim('inexistente'), false);
+  const A = h.get('Achv'), S = h.get('StatsMgr');
+  const p = Object.fromEntries(plain(A.progress(S.load())).map((a) => [a.id, a]));
+  assert.equal(p.lines_100.value, 100); assert.equal(p.lines_100.reward, 1); assert.equal(p.lines_500.value, 120); assert.equal(p.lines_500.reward, 2);
+  const f = plain(A.check(S.load())); assert.deepEqual(f.map((x) => [x.id, x.reward]).sort(), [['first_game', 0], ['lines_100', 1]]);
+  assert.equal(h.get('Rewards').stars(), 1); assert.deepEqual(plain(A.check(S.load())), [], 'nada novo'); assert.equal(h.get('Rewards').stars(), 1, 'sem estrelas duplicadas');
 });
-test('missões: concluir durante a partida aparece no resultado', () => {
+test('conquistas com recompensa: quem já resgatou a missão antiga não ganha as estrelas de novo; recompensa pendente de conquista antiga é acertada', () => {
+  const stats = JSON.stringify({ all: { lines: 600, games: 12, bestLevel: 11 }, modes: {} });
+  const h = load(1, { tetris_stats: stats, tetris_rewards: JSON.stringify({ m_lines_100: { n: 1, t: 5 } }), tetris_achv: JSON.stringify({ level_10: 7 }) });
+  const A = h.get('Achv'), S = h.get('StatsMgr'), R = h.get('Rewards');
+  const f = Object.fromEntries(plain(A.check(S.load())).map((x) => [x.id, x.reward]));
+  assert.equal(f.lines_100, 0, 'já resgatada como missão: sem estrelas novas'); assert.equal(f.lines_500, 2); assert.equal(f.games_10, 1);
+  assert.equal(R.has('m_level_10'), true, 'conquista já desbloqueada antes: recompensa pendente concedida'); assert.equal(R.stars(), 1 + 2 + 1 + 2);   // m_lines_100 + lines_500 + games_10 + level_10
+  assert.equal(plain(A.load()).level_10, 7, 'instante antigo preservado');
+});
+test('conquistas: concluir durante a partida aparece no resultado com as estrelas', () => {
   const h = load(1); h.sb.newGame(1); h.setState('PLAY');
   rows(h.G(), 16, 20, [9]); put(h, 'I', 1, 7, 16); h.sb.lockPiece();   // tetris + perfect clear
   h.sb.gameOver();
-  assert.ok(h.els.endStats.children.some((c) => /Missão concluída: Tabuleiro limpo/.test(c.textContent || '')));
-  assert.ok(Object.keys(plain(h.get('Achv').load())).length > 0);
+  assert.ok(h.els.endStats.children.some((c) => /Conquista: Perfect Clear · \+3 ⭐/.test(c.textContent || '')));
+  assert.ok(Object.keys(plain(h.get('Achv').load())).length > 0); assert.equal(h.get('Rewards').has('m_perfect_1'), true);
+  assert.ok(!h.els.endStats.children.some((c) => /Missão/.test(c.textContent || '')), 'não existe mais "Missão concluída"');
 });
-test('missões e diário: telas abrem sem erro', () => {
+test('conquistas e diário: telas abrem sem erro; missões não existem mais', () => {
   const h = load(1);
-  assert.doesNotThrow(() => { h.sb.openMissions(); h.get('Modes').list.find((m) => m.label === 'Desafio diário').open(); });
+  assert.doesNotThrow(() => { h.sb.openAchievements(); h.get('Modes').list.find((m) => m.label === 'Desafio diário').open(); });
+  assert.equal(typeof h.sb.openMissions, 'undefined'); assert.equal(Array.from(h.get('Hub').items.map((x) => x.label)).includes('Missões'), false);
 });
