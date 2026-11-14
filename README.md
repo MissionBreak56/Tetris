@@ -6,7 +6,7 @@ Tetris para Android feito do zero, sem anúncios e sem rede, inspirado nas regra
 - Gravidade pela tabela de quadros (níveis 1–30)
 - Tela inicial neon com TODOS os modos (CLASSIC, 2 MINUTES, STRATEGY, ZEN, SPRINT 40, DAILY, CUSTOM, VERSUS, TORNEIO, TUTORIAL) e os botões LEVEL, THEME, GHOST, MUSIC, SOUND, que acompanha o tema escolhido
 - Modos: **Classic**, **2 Minutes** (Ultra), **Strategy** (bloco-pergunta com 9 habilidades), **Zen** (sem game over), **Sprint 40**, **Desafio diário** (determinístico por data), **Desafios personalizados**, **Versus** (IA em 3 níveis ou 2 jogadores) e **Torneios** eliminatórios
-- Tutorial interativo, estatísticas e análises (PPS/APM), histórico, ranking local, conquistas, missões e recompensas
+- Tutorial interativo, estatísticas e análises (PPS/APM), histórico, ranking local (um por perfil), conquistas, missões e recompensas
 - **Online em rede local** (Wi-Fi/hotspot ou VPN): crie ou procure uma sala e jogue Versus contra outra pessoa em outro aparelho, cada um com a sua tela cheia e latência de comando ≈ 0 (`docs/ONLINE.md`)
 - **Perfis locais** com dados isolados, **replays** determinísticos (exportar/importar com verificação), **backup/restauração** transacional
 - 4 temas + **editor de temas** que personaliza tudo: tabuleiro, peças e a **interface** (janelas, botões e textos), com validação de contraste, 4 skins de peças, controles e áudio personalizáveis

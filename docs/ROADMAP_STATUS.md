@@ -15,7 +15,7 @@
 | 16–17 | Skins e editor de temas com validação de contraste | `js/skins.js`, `js/themes.js` |
 | 18 | Perfis (p1 mantém as chaves antigas) | `js/profiles.js` |
 | 19 | PPS/APM/tendência; camada única de ações; passo fixo | `js/analysis.js`, `js/actions.js` |
-| 20 | Ranking local (só modos oficiais) | `js/ranking.js` |
+| 20 | Ranking local por perfil (só modos oficiais; top 10 de cada perfil) | `js/ranking.js` |
 | 21–22 | Replays determinísticos, export/import, ponte Android | `js/replay.js`, `js/native.js`, `MainActivity.java` |
 | 23 | Modularização + arquitetura | `js/core/*`, `docs/ARCHITECTURE.md` |
 | 24 | Testes de robustez/fuzz | `tests/robustness.test.js` |
