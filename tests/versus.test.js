@@ -165,3 +165,23 @@ test('resultado: contra IA grava estatísticas do modo 8 (sem ranking/recorde/re
   assert.equal(plain(g.get('StatsMgr').load()).all.games, 0); assert.match(g.els.endTitle.textContent, /VENCEU/);
 });
 test('menu do Versus abre', () => { const h = load(1); assert.doesNotThrow(() => h.sb.openVersus()); });
+
+/* ---- quebra de linhas cinzas (online) ---- */
+test('breakGray: quebra de baixo para cima, só linhas cinzas, limitado ao que existe; linhas com peças não são tocadas', () => {
+  const h = load(1), v = vs(h), R = 20, GRAY = '#707070';
+  const g = v.B[1];
+  for (let c = 0; c < 10; c++) { g.grid[19][c] = c === 2 ? null : GRAY; g.grid[18][c] = c === 5 ? null : GRAY; g.grid[17][c] = c === 7 ? null : FILL; }   // 19,18 cinzas; 17 com peças
+  g.grid[16][3] = FILL;
+  assert.equal(v.isGrayRow(g.grid[19]), true); assert.equal(v.isGrayRow(g.grid[17]), false); assert.equal(v.isGrayRow(g.grid[0]), false, 'vazia não é cinza');
+  assert.equal(v.breakGray(1, 1), 1);
+  assert.equal(g.grid.length, R); assert.equal(g.grid[19][5], null, 'a de cima (18) desceu para 19'); assert.equal(g.grid[19][2], GRAY);
+  assert.equal(g.grid[18][7], null); assert.equal(g.grid[18][0], FILL, 'a linha de peças desceu 1'); assert.equal(g.grid[17][3], FILL);
+  assert.equal(v.breakGray(1, 5), 1, 'só havia mais uma cinza'); assert.equal(v.breakGray(1, 3), 0);
+  assert.equal(v.isGrayRow(g.grid[19]), false); assert.equal(g.grid[19][0], FILL); assert.equal(v.breakGray(1, 0), 0);
+});
+test('versus local (IA / 2 jogadores): a regra de quebrar linhas cinzas NÃO vale (só online)', () => {
+  const h = load(1), v = vs(h), GRAY = '#707070';
+  for (let c = 0; c < 10; c++) v.B[1].grid[19][c] = c === 0 ? null : GRAY;
+  v.withBoard(0, () => { const G = h.G(); for (let c = 0; c < 10; c++) G.grid[19][c] = c === 9 ? null : FILL; G.active = h.sb.makePiece('I'); Object.assign(G.active, { rot: 1, x: 7, y: 16 }); h.sb.lockPiece(); });
+  assert.equal(v.B[0].lines, 1); assert.equal(v.isGrayRow(v.B[1].grid[19]), true, 'a cinza do oponente continua');
+});

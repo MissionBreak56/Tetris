@@ -1,6 +1,7 @@
 'use strict';
 /* Versus: dois tabuleiros na mesma tela (humano×IA ou humano×humano). Reaproveita o motor trocando o tabuleiro ativo (withBoard).
-   Lixo/ataque: 2 linhas=1, 3=2, Tetris=4, T-Spin 1/2/3=2/4/6, +1 B2B, bônus de combo, Perfect Clear=10. Ataques cancelam lixo recebido. */
+   Lixo/ataque: 2 linhas=1, 3=2, Tetris=4, T-Spin 1/2/3=2/4/6, +1 B2B, bônus de combo, Perfect Clear=10. Ataques cancelam lixo recebido.
+   ONLINE: cada linha que você limpa também QUEBRA uma linha cinza (lixo) que já está no tabuleiro do oponente (a de baixo primeiro) — a partida dura mais. */
 const COMBO_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
 const GARBAGE_COLOR = '#707070';
 const Versus = {
@@ -60,6 +61,20 @@ const Versus = {
     if (info.n > 0) a += COMBO_BONUS[Math.min(combo, COMBO_BONUS.length - 1)];
     return a;
   },
+  /** Linha cinza = só células de lixo (uma ou mais) e nenhuma outra: sobra só o buraco do lixo. */
+  isGrayRow(row) { let n = 0; for (const c of row) { if (c === GARBAGE_COLOR) n++; else if (c) return false; } return n > 0; },
+  /** Quebra até n linhas cinzas do tabuleiro i (de baixo para cima); o que está acima desce. Devolve quantas quebrou. */
+  breakGray(i, n) {
+    const g = this.B[i]; if (!g || g.overDone || n <= 0) return 0;
+    let done = 0;
+    for (; done < n; done++) {
+      let y = -1; for (let r = g.grid.length - 1; r >= 0; r--) if (this.isGrayRow(g.grid[r])) { y = r; break; }
+      if (y < 0) break;
+      g.grid.splice(y, 1); g.grid.unshift(Array.from({ length: COLS }, () => null));
+    }
+    if (done) { g.rowOff = Array(ROWS).fill(0); g.qBlock = null; }
+    return done;
+  },
   addGarbage(g, rows) {
     const hole = Math.floor(this.rng() * COLS), overflow = g.grid.slice(0, rows).some((r) => r.some(Boolean));
     g.grid = g.grid.slice(rows).concat(Array.from({ length: rows }, () => Array.from({ length: COLS }, (_, c) => (c === hole ? null : GARBAGE_COLOR))));
@@ -73,6 +88,7 @@ const Versus = {
       const c = Math.min(atk, this.pend[i]); this.pend[i] -= c; atk -= c;
       if (atk > 0) { this.pend[1 - i] += atk; this.sent[i] += atk; }
     }
+    if (this.net && info.n > 0) this.breakGray(1 - i, info.n);          // online: cada linha limpa quebra uma linha cinza do oponente
     if (info.n === 0 && this.pend[i] > 0 && !G.overDone) { const rows = Math.min(8, this.pend[i]); this.pend[i] -= rows; this.addGarbage(G, rows); }
   },
   /** Atualiza os dois tabuleiros por 1 tick (ticks já incrementado). Compartilhado entre jogo local e online. */
@@ -391,7 +407,7 @@ addEventListener('pointercancel', (e) => endVsTouch(e, true));
 
 function openVersus() {
   Sheet.push('Versus', (b) => {
-    b.appendChild(h('div', { class: 'hint', text: 'Dois tabuleiros. Limpar linhas envia lixo ao oponente (2 linhas=1, 3=2, Tetris=4, T-Spin=2/4/6, +1 B2B). Perde quem topar primeiro. Contra a IA os gestos valem na tela toda; com dois jogadores, cada um usa a sua metade.' }));
+    b.appendChild(h('div', { class: 'hint', text: 'Dois tabuleiros. Limpar linhas envia lixo ao oponente (2 linhas=1, 3=2, Tetris=4, T-Spin=2/4/6, +1 B2B); online, cada linha limpa também quebra uma linha cinza do oponente. Perde quem topar primeiro. Contra a IA os gestos valem na tela toda; com dois jogadores, cada um usa a sua metade.' }));
     const me = () => Profile.cur().name;
     Object.keys(AI.levels).forEach((k) => b.appendChild(btn('Contra IA — ' + AI.levels[k].name, () => Versus.start({ players: [{ kind: 'human', name: me() }, { kind: 'ai', name: 'IA ' + AI.levels[k].name, level: k }] }))));
     b.appendChild(btn('Dois jogadores (mesma tela)', () => Versus.start({ players: [{ kind: 'human', name: 'Jogador 1' }, { kind: 'human', name: 'Jogador 2' }] })));
