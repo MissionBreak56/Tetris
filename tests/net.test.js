@@ -56,7 +56,7 @@ test('conexão: aperto de mão leva os dois ao lobby com os nomes do oponente', 
   assert.equal(P.T.a.hosted[1], 47600); assert.deepEqual(P.T.b.joined, ['192.168.0.5', 47600]);
 });
 test('conexão: versão do protocolo ou do motor diferente é recusada com mensagem', () => {
-  for (const bad of [{ p: 4, eng: 'E2' }, { p: 5, eng: 'E1' }]) {
+  for (const bad of [{ p: 5, eng: 'E2' }, { p: 6, eng: 'E1' }]) {
     const h = load(1); const fake = { available: () => true, host() {}, scan() {}, join() {}, close() { this.closed = true; }, send(l) { this.out.push(l); }, out: [] };
     h.sb.__T = fake; h.run('Net.T=__T'); NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
     NetOf(h)._line(JSON.stringify(Object.assign({ k: 'hello', name: 'X' }, bad)));
@@ -69,13 +69,13 @@ test('conexão: mensagens malformadas, grandes ou antes do hello são ignoradas'
   NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
   for (const junk of ['', 'x', '[]', '5', 'null', '{"k":5}', '{"k":"start","seed":1}', '{"k":"in","u":1,"e":[]}', 'x'.repeat(20000), '{"k":"hello","p":1,"eng":"E2"' ]) NetOf(h)._line(junk);
   assert.equal(NetOf(h).st, 'handshake'); assert.equal(NetOf(h).peer, null);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 5, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 6, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
   assert.equal(NetOf(h).st, 'lobby'); assert.ok(!/[<>\n]/.test(NetOf(h).peer.name) && NetOf(h).peer.name.length <= 16);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 5, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 6, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
 });
 test('conexão: nome igual ao seu recebe sufixo; tempo esgotado no aperto de mão desconecta', () => {
   const h = load(1); h.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; h.run('Net.T=__T');
-  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 5, eng: 'E2', name: 'Jogador 1' }));
+  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 6, eng: 'E2', name: 'Jogador 1' }));
   assert.equal(NetOf(h).peer.name, 'Jogador 1 (2)');
   const g = load(1); g.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; g.run('Net.T=__T');
   NetOf(g).host(); NetOf(g)._ev({ e: 'connected' }); let t = Date.now(); NetOf(g).now = () => t; NetOf(g).hsAt = t; t += 6000; NetOf(g).heartbeat();
@@ -277,34 +277,50 @@ test('aviso na tela: "Aguardando o oponente…" só com espera real; "Reconectan
   drop(P); P.tick(120); names.length = 0; assert.doesNotThrow(() => a.sb.render());
   assert.equal(has(/Reconectando/), true); assert.equal(has(/Partida parada · \d+ s/), true); assert.equal(has(/Aguardando o oponente/), false, 'reconectando tem o próprio aviso');
 });
-/* ---- online: cada linha limpa quebra uma linha cinza do oponente ---- */
+/* ---- online: a cada 2 linhas coloridas limpas, folga uma linha cinza do PRÓPRIO tabuleiro ---- */
 const GRAY = '#707070', FILLR = '#ff4d4d';
 const grayRows = (g) => g.grid.map((r, i) => (r.some((c) => c === GRAY) && r.every((c) => !c || c === GRAY) ? i : -1)).filter((i) => i >= 0);
-test('online: cada linha limpa quebra uma linha cinza do oponente (de baixo para cima); o que está acima desce; as duas telas ficam iguais', () => {
-  for (const [lat, hardOnA] of [[0, true], [4, true]]) {
+/** Aplica o mesmo cenário nos dois aparelhos e refaz o ponto de volta da correção no tick atual. */
+function both(P, fn) { for (const h of [P.A, P.B]) { fn(V(h), h); V(h).net.snaps[V(h).ticks] = V(h).snap(); } }
+const grayRow = (g, r, hole) => { for (let c = 0; c < 10; c++) g.grid[r][c] = c === hole ? null : GRAY; };
+const almost = (g, r, holes) => { for (let c = 0; c < 10; c++) g.grid[r][c] = holes.includes(c) ? null : FILLR; };
+test('online: 2 linhas coloridas limpas quebram 1 linha cinza do PRÓPRIO tabuleiro (a de baixo); o tabuleiro do oponente não é tocado; iguais nos dois aparelhos', () => {
+  for (const lat of [0, 4]) {
     const P = startMatch(pair({ lat, seed: 5 })); P.tick(3);
-    for (const h of [P.A, P.B]) {                                           // mesmo cenário nos dois aparelhos (e novo ponto de volta para a correção)
-      const v = V(h), R = h.get('ROWS') || 20, C = 10;
+    both(P, (v, h) => {
       const a = v.B[0], b = v.B[1];
-      for (let r = R - 2; r < R; r++) for (let c = 0; c < C; c++) a.grid[r][c] = (c === 4 || c === 5) ? null : FILLR;       // A: 2 linhas faltando só o encaixe do O
-      for (let k = 1; k <= 3; k++) for (let c = 0; c < C; c++) b.grid[R - k][c] = c === k ? null : GRAY;                          // B: 3 linhas cinzas
-      b.grid[R - 4][5] = FILLR;                                                                                                   // peça do B em cima das cinzas
-      a.active = h.get('makePiece')('O'); v.net.snaps[v.ticks] = v.snap();
-    }
-    P.A.sb.__v = V(P.A); assert.equal(grayRows(V(P.A).B[1]).length, 3);
-    assert.equal(V(P.A).input(0, P.A.get('A').HARD), true);
-    P.tick(10 + lat * 2);
+      almost(a, 15, [4, 5]); almost(a, 16, [4, 5]);                                     // A: 2 linhas coloridas faltando o encaixe do O...
+      grayRow(a, 17, 1); grayRow(a, 18, 2); grayRow(a, 19, 3);                          // ...em cima de 3 linhas cinzas
+      grayRow(b, 18, 1); grayRow(b, 19, 2);                                             // B: 2 cinzas (não podem ser tocadas)
+      a.active = h.get('makePiece')('O');
+    });
+    assert.equal(V(P.A).input(0, P.A.get('A').HARD), true); P.tick(10 + lat * 2);
     for (const [name, h] of [['A', P.A], ['B', P.B]]) {
-      const b = V(h).B[1], R = b.grid.length;
-      assert.equal(grayRows(b).length, 1, name + ': 2 linhas limpas quebraram 2 cinzas (restou 1), lat=' + lat);
-      assert.equal(grayRows(b)[0], R - 1, name + ': a de cima (R-3) foi a que sobrou? as de baixo quebram primeiro');
-      assert.equal(b.grid[R - 2][5], FILLR, name + ': a peça do B desceu 2 linhas');
-      assert.equal(V(h).B[0].lines, 2, name + ': A limpou 2 linhas');
+      const v = V(h);
+      assert.equal(v.B[0].lines, 2, name + ': A limpou 2 linhas coloridas'); assert.deepEqual(plain(grayRows(v.B[0])), [18, 19], name + ': sobraram 2 cinzas no tabuleiro de A (a de baixo quebrou), lat=' + lat);
+      assert.equal(v.B[0].grid[19][2], null, name + ': a antiga do meio (buraco na coluna 2) desceu para o fundo'); assert.equal(v.B[0].grid[18][1], null, name + ': a de cima (buraco 1) desceu');
+      assert.deepEqual(plain(grayRows(v.B[1])), [18, 19], name + ': o oponente não perdeu cinzas'); assert.equal(v.gl[0], 0, name + ': conta zerada');
     }
     assert.equal(V(P.A).snapHash(V(P.A).snap()), V(P.B).snapHash(V(P.B).snap()), 'iguais nos dois aparelhos');
   }
 });
-test('online: quebra de linhas cinzas é igual nos dois aparelhos em partidas longas com ataques (sem aborto) e nunca quebra mais cinzas do que existem', () => {
+test('online: linhas limpas somam de 1 em 1 (2 limpezas de 1 linha = 1 cinza quebrada) e linhas de lixo limpas não contam', () => {
+  const P = startMatch(pair({ lat: 1, seed: 6 })); P.tick(3);
+  const wipe = (v) => { for (let r = 0; r < 20; r++) for (let c = 0; c < 10; c++) v.B[0].grid[r][c] = null; };
+  const hardI = (v, h) => { v.B[0].active = Object.assign(h.get('makePiece')('I'), { rot: 1, x: -2, y: 0 }); };    // I em pé na coluna 0
+  const drop = () => { assert.equal(V(P.A).input(0, P.A.get('A').HARD), true); P.tick(12); };
+  const st = (h) => ({ gl: V(h).gl[0], gray: grayRows(V(h).B[0]).length, lines: V(h).B[0].lines });
+  const colored = (v, h) => { wipe(v); grayRow(v.B[0], 18, 5); grayRow(v.B[0], 19, 6); almost(v.B[0], 17, [0]); hardI(v, h); };          // 2 cinzas + 1 linha colorida faltando a coluna 0
+  both(P, colored); drop();
+  for (const h of [P.A, P.B]) assert.deepEqual(plain(st(h)), { gl: 1, gray: 2, lines: 1 }, 'depois de 1 linha colorida: ainda não quebrou');
+  both(P, colored); drop();
+  for (const h of [P.A, P.B]) assert.deepEqual(plain(st(h)), { gl: 0, gray: 1, lines: 2 }, 'completou 2 linhas coloridas: quebrou 1 cinza');
+  // linha de lixo limpa (buraco da cinza preenchido) NÃO conta para a folga
+  both(P, (v, h) => { wipe(v); v.gl[0] = 1; grayRow(v.B[0], 19, 5); grayRow(v.B[0], 18, 0); hardI(v, h); }); drop();
+  for (const h of [P.A, P.B]) assert.deepEqual(plain(st(h)), { gl: 1, gray: 1, lines: 3 }, 'limpou uma linha de lixo: conta como linha, mas não para a folga (gl continua 1, nenhuma cinza extra quebrada)');
+  assert.equal(V(P.A).snapHash(V(P.A).snap()), V(P.B).snapHash(V(P.B).snap()));
+});
+test('online: a folga de linhas cinzas é igual nos dois aparelhos em partidas longas com ataques (sem aborto)', () => {
   for (const seed of [41, 42, 43]) {
     const P = logInputs(startMatch(pair({ lat: 2, jitter: 1, seed }))), inp = randomInputs(seed * 3);
     for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) { P.tick(1, inp); for (const h of [P.A, P.B]) for (const g of V(h).B) assert.ok(g.grid.every((r) => r.length === 10) && g.grid.length === 20, 'grade íntegra'); }

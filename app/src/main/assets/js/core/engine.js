@@ -118,6 +118,7 @@ function lockPiece(){
   const cleared=[];
   for(let r=0;r<ROWS;r++) if(G.grid[r].every(c=>c)) cleared.push(r);
   const n=cleared.length;
+  const grayN=n&&typeof GARBAGE_COLOR==='string'?cleared.filter(r=>G.grid[r].some(c=>c===GARBAGE_COLOR)).length:0;   // linhas de lixo entre as limpas (não contam como "coloridas")
   G.pieces++;
   if(n>0){ G.combo++; if(G.combo>G.maxCombo) G.maxCombo=G.combo; } else G.combo=0;
   if(n===4) G.tetrises++;
@@ -155,7 +156,7 @@ function lockPiece(){
   G.lines+=n;
   while(G.rules.levelUps&&G.lines>=10*G.level&&G.level<30){ G.level++; showMsg('LEVEL '+G.level); FX.pulse=1; }
   if(n>0) tutEv('line');
-  if(G.versus) Versus.onLock({n,tspin,b2b:gotB2B,perfect:pcl});
+  if(G.versus) Versus.onLock({n,tspin,b2b:gotB2B,perfect:pcl,gray:grayN});
   if(checkGoal()) return;
   if(!G.over) spawn();
 }

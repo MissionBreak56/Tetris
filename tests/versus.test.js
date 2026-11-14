@@ -179,9 +179,9 @@ test('breakGray: quebra de baixo para cima, só linhas cinzas, limitado ao que e
   assert.equal(v.breakGray(1, 5), 1, 'só havia mais uma cinza'); assert.equal(v.breakGray(1, 3), 0);
   assert.equal(v.isGrayRow(g.grid[19]), false); assert.equal(g.grid[19][0], FILL); assert.equal(v.breakGray(1, 0), 0);
 });
-test('versus local (IA / 2 jogadores): a regra de quebrar linhas cinzas NÃO vale (só online)', () => {
+test('versus local (IA / 2 jogadores): a folga de linhas cinzas NÃO vale (só online)', () => {
   const h = load(1), v = vs(h), GRAY = '#707070';
-  for (let c = 0; c < 10; c++) v.B[1].grid[19][c] = c === 0 ? null : GRAY;
-  v.withBoard(0, () => { const G = h.G(); for (let c = 0; c < 10; c++) G.grid[19][c] = c === 9 ? null : FILL; G.active = h.sb.makePiece('I'); Object.assign(G.active, { rot: 1, x: 7, y: 16 }); h.sb.lockPiece(); });
-  assert.equal(v.B[0].lines, 1); assert.equal(v.isGrayRow(v.B[1].grid[19]), true, 'a cinza do oponente continua');
+  for (let c = 0; c < 10; c++) { v.B[0].grid[18][c] = c === 5 ? null : GRAY; v.B[0].grid[19][c] = c === 6 ? null : GRAY; }
+  v.withBoard(0, () => { const G = h.G(); for (let r = 14; r < 16; r++) for (let c = 0; c < 10; c++) G.grid[r][c] = c === 4 || c === 5 ? null : FILL; G.active = h.sb.makePiece('O'); Object.assign(G.active, { x: 3, y: 14 }); h.sb.lockPiece(); });
+  assert.equal(v.B[0].lines, 2); assert.equal(v.isGrayRow(v.B[0].grid[19]), true); assert.equal(v.isGrayRow(v.B[0].grid[18]), true, 'as duas cinzas continuam'); assert.deepEqual(plain(v.gl), [0, 0]);
 });

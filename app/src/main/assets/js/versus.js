@@ -1,12 +1,13 @@
 'use strict';
 /* Versus: dois tabuleiros na mesma tela (humano×IA ou humano×humano). Reaproveita o motor trocando o tabuleiro ativo (withBoard).
    Lixo/ataque: 2 linhas=1, 3=2, Tetris=4, T-Spin 1/2/3=2/4/6, +1 B2B, bônus de combo, Perfect Clear=10. Ataques cancelam lixo recebido.
-   ONLINE: cada linha que você limpa também QUEBRA uma linha cinza (lixo) que já está no tabuleiro do oponente (a de baixo primeiro) — a partida dura mais. */
+   ONLINE: a cada 2 linhas COLORIDAS que você limpa, uma linha cinza (lixo) do SEU tabuleiro é quebrada (a de baixo primeiro) — a partida dura mais.
+   Linhas de lixo que você limpa não contam; sobra 0 ou 1 linha para a conta seguinte. */
 const COMBO_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
 const GARBAGE_COLOR = '#707070';
 const Versus = {
   PRED_MAX: 45, SNAP_WIN: 70, PACE_MAX: 0.2, PACE_GAIN: 0.02, LEAD_MARGIN: 6, STALL_SHOW_S: 0.35,
-  active: false, net: null, cfg: null, B: [], pend: [0, 0], sent: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,
+  active: false, net: null, cfg: null, B: [], pend: [0, 0], sent: [0, 0], gl: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,
   layouts() {
     if (this.net) { this.cellV = CELL; this.lay = [L, L]; return; }          // online: cada um vê SÓ a sua tela (layout solo); gestos usam o tamanho de célula solo
     const hw = W / 2, C = Math.max(10, Math.floor(Math.min((hw - 10) / (COLS + 1), (H * 0.78) / (ROWS + 3)))), pad = C * 0.4;
@@ -28,7 +29,7 @@ const Versus = {
   /** cfg: { players:[{kind:'human'|'ai',name,level}, ...2], seed?, onEnd?(result), silent? } — humano sempre no índice 0 quando só há um. */
   create(cfg) {
     const seed = cfg.seed != null ? cfg.seed >>> 0 : (Math.random() * 4294967296) >>> 0;
-    this.cfg = cfg; this.pend = [0, 0]; this.sent = [0, 0]; this.ticks = 0; this.acc = 0; this.over = false; this.result = null; this.touch = [null, null];
+    this.cfg = cfg; this.pend = [0, 0]; this.sent = [0, 0]; this.gl = [0, 0]; this.ticks = 0; this.acc = 0; this.over = false; this.result = null; this.touch = [null, null];
     this.rng = mkRng(seed ^ 0x9e3779b9); this.B = [];
     this.net = cfg.net ? { local: cfg.net.local, link: true, soft: [false, false], q: [{}, {}], remoteUpto: -1, out: [], snaps: {}, rb: null, endTick: null, nextH: Net.HASH_EVERY, hashes: {}, remoteHashes: {} } : null;
     this.layouts();
@@ -88,7 +89,10 @@ const Versus = {
       const c = Math.min(atk, this.pend[i]); this.pend[i] -= c; atk -= c;
       if (atk > 0) { this.pend[1 - i] += atk; this.sent[i] += atk; }
     }
-    if (this.net && info.n > 0) this.breakGray(1 - i, info.n);          // online: cada linha limpa quebra uma linha cinza do oponente
+    if (this.net && info.n > 0) {                                        // online: a cada 2 linhas coloridas limpas, folga uma linha cinza do PRÓPRIO tabuleiro
+      this.gl[i] += info.n - (info.gray || 0); const k = Math.floor(this.gl[i] / 2); this.gl[i] -= 2 * k;
+      if (k > 0) this.breakGray(i, k);
+    }
     if (info.n === 0 && this.pend[i] > 0 && !G.overDone) { const rows = Math.min(8, this.pend[i]); this.pend[i] -= rows; this.addGarbage(G, rows); }
   },
   /** Atualiza os dois tabuleiros por 1 tick (ticks já incrementado). Compartilhado entre jogo local e online. */
@@ -237,9 +241,9 @@ function restoreBoard(g, s) {
   }
   for (const k of Object.keys(g)) if (!(k in s) && !NOT_STATE.includes(k)) delete g[k];
 }
-Versus.snap = function () { return { B: this.B.map(cloneBoard), pend: this.pend.slice(), sent: this.sent.slice(), vr: this.rng.get() }; };
+Versus.snap = function () { return { B: this.B.map(cloneBoard), pend: this.pend.slice(), sent: this.sent.slice(), gl: this.gl.slice(), vr: this.rng.get() }; };
 Versus.unsnap = function (s, tick) {
-  s.B.forEach((b, i) => restoreBoard(this.B[i], b)); this.pend = s.pend.slice(); this.sent = s.sent.slice(); this.rng.set(s.vr); this.ticks = tick;
+  s.B.forEach((b, i) => restoreBoard(this.B[i], b)); this.pend = s.pend.slice(); this.sent = s.sent.slice(); this.gl = s.gl.slice(); this.rng.set(s.vr); this.ticks = tick;
 };
 /** Conexão caiu (false) ou voltou (true): com a conexão caída o jogo para dos dois lados (o oponente para sozinho ao esgotar a previsão). */
 Versus.netLink = function (ok) { if (!this.net) return; this.net.link = !!ok; this.net.stall = 0; if (!ok) this.acc = 0; };
@@ -302,7 +306,7 @@ Versus.netRecv = function (m) {
     jogadores — não fazem parte da simulação (antes, temas diferentes causavam "dessincronizaram" já no 1º hash, tick 120). */
 Versus.gridKey = function (grid) { return grid.map((r) => r.map((c) => (c ? 1 : 0)).join('')); };
 Versus.snapHash = function (s) {
-  return fnv(JSON.stringify([s.B.map((b) => [this.gridKey(b.grid), Math.round(b.score), b.lines, b.level, b.tick, b.active && b.active.t, b.active && b.active.x, b.active && b.active.y, b.held, b.queue.slice(0, 3)]), s.pend, s.sent]));
+  return fnv(JSON.stringify([s.B.map((b) => [this.gridKey(b.grid), Math.round(b.score), b.lines, b.level, b.tick, b.active && b.active.t, b.active && b.active.x, b.active && b.active.y, b.held, b.queue.slice(0, 3)]), s.pend, s.sent, s.gl]));
 };
 Versus.netRecvHash = function (m) {
   const n = this.net; if (!Number.isInteger(m.t) || typeof m.h !== 'string' || m.h.length > 16) return;
@@ -407,7 +411,7 @@ addEventListener('pointercancel', (e) => endVsTouch(e, true));
 
 function openVersus() {
   Sheet.push('Versus', (b) => {
-    b.appendChild(h('div', { class: 'hint', text: 'Dois tabuleiros. Limpar linhas envia lixo ao oponente (2 linhas=1, 3=2, Tetris=4, T-Spin=2/4/6, +1 B2B); online, cada linha limpa também quebra uma linha cinza do oponente. Perde quem topar primeiro. Contra a IA os gestos valem na tela toda; com dois jogadores, cada um usa a sua metade.' }));
+    b.appendChild(h('div', { class: 'hint', text: 'Dois tabuleiros. Limpar linhas envia lixo ao oponente (2 linhas=1, 3=2, Tetris=4, T-Spin=2/4/6, +1 B2B); online, a cada 2 linhas coloridas limpas folga uma linha cinza do seu tabuleiro. Perde quem topar primeiro. Contra a IA os gestos valem na tela toda; com dois jogadores, cada um usa a sua metade.' }));
     const me = () => Profile.cur().name;
     Object.keys(AI.levels).forEach((k) => b.appendChild(btn('Contra IA — ' + AI.levels[k].name, () => Versus.start({ players: [{ kind: 'human', name: me() }, { kind: 'ai', name: 'IA ' + AI.levels[k].name, level: k }] }))));
     b.appendChild(btn('Dois jogadores (mesma tela)', () => Versus.start({ players: [{ kind: 'human', name: 'Jogador 1' }, { kind: 'human', name: 'Jogador 2' }] })));
