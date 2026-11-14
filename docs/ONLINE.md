@@ -49,6 +49,10 @@ O Versus local (contra a IA ou dois jogadores no mesmo aparelho) continua com a 
   do tick do fim, idêntico nos dois aparelhos (um topo "previsto" que depois some com uma ação atrasada é desfeito).
 - **Detecção de divergência**: a cada 120 ticks cada lado envia o hash do estado **confirmado** (o grid entra só como ocupação 0/1: as cores vêm do tema de cada aparelho e podem diferir) (a partir dos snapshots) dos dois tabuleiros;
   hash diferente encerra a partida ("dessincronizaram") sem registrar estatística. Mensagens inválidas, fora de ordem ou além da janela também abortam.
+- **Ritmo do relógio e aviso de espera**: se um aparelho engasga (GC, notificação, app em 2º plano por instantes), o outro ficava "encostado" no limite da previsão
+  **para sempre** (o adiantamento nunca diminuía) e mostrava "Aguardando o oponente…" com o jogo fluindo. Agora quem está adiantado (mínimo recente de
+  `ticks − (remoteUpto+1)` acima de ≈ meia latência + 6 ticks) anda até **20% mais devagar** (`Versus.netPace`, só escala o tempo — os ticks seguem iguais, sem risco de
+  dessincronia) até o excesso sumir; latência normal não muda nada. O aviso só aparece quando o jogo está **realmente travado** no limite por mais de 0,35 s (`net.stall`).
 - **Reconexão automática (queda no meio da partida)**: soquete fechado ou 5 s sem receber nada **não é mais derrota**. Os dois lados entram em "Reconectando…"
   (o jogo fica parado nos dois, com contagem regressiva na tela) por até **20 s**: o anfitrião reabre a porta com `listen` (sem anunciar) e o cliente tenta
   conectar de novo a cada 1 s. Ao reconectar trocam `resume{sid,a}` (`sid` = identificador secreto da sessão, gerado pelo anfitrião em `start`; conexões de outra

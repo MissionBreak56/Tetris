@@ -8,7 +8,7 @@ const NetOf = (h) => h.get('Net');
 const V = (h) => h.get('Versus');
 
 /** Cria o par anfitrião/cliente já conectado (aperto de mão feito) com latência/jitter configuráveis (em quadros). */
-function pair({ lat = 0, jitter = 0, seed = 1, names = ['Ana', 'Beto'] } = {}) {
+function pair({ lat = 0, jitter = 0, seed = 1, names = ['Ana', 'Beto'], fps = [1, 1] } = {}) {   // fps: a cada quantos passos de 1/60 s cada aparelho desenha um quadro (2 = 30 fps)
   const A = load(11), B = load(22); let step = 0, x = seed >>> 0;
   const rnd = () => (x = (Math.imul(x, 1664525) + 1013904223) >>> 0);
   const q = { ab: [], ba: [] }, sent = { a: [], b: [] }, T = {};
@@ -25,13 +25,13 @@ function pair({ lat = 0, jitter = 0, seed = 1, names = ['Ana', 'Beto'] } = {}) {
   const P = {
     A, B, T, q, sent, step: () => step,
     hold: false,
-    deliver() { if (P.hold) return; for (const [dir, to] of [['ab', B], ['ba', A]]) { const arr = q[dir]; while (arr.length && arr[0][0] <= step) NetOf(to)._line(arr.shift()[1]); } },
+    deliver() { if (P.hold) return; for (const [dir, to, k] of [['ab', B, 1], ['ba', A, 0]]) { if (P.frozen && P.frozen[k]) continue; const arr = q[dir]; while (arr.length && arr[0][0] <= step) NetOf(to)._line(arr.shift()[1]); } },
     tick(n = 1, inputs) {
       for (let i = 0; i < n; i++) {
         step++; P.deliver();
-        if (step % 30 === 0) for (const h of [A, B]) NetOf(h).heartbeat();     // timer de 0,5 s
+        if (step % 30 === 0) [A, B].forEach((h, k) => { if (!(P.frozen && P.frozen[k])) NetOf(h).heartbeat(); });     // timer de 0,5 s (app em segundo plano = tudo parado)
         if (inputs) inputs(P);
-        for (const h of [A, B]) if (h.state() === 'VERSUS') V(h).frame(1 / 60);
+        [A, B].forEach((h, k) => { if (h.state() === 'VERSUS' && step % fps[k] === 0 && !(P.frozen && P.frozen[k])) V(h).frame(fps[k] / 60); });
       }
     },
   };
@@ -185,6 +185,115 @@ test('estresse: quedas aleatórias (momento e duração variados, com latência/
     assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap()), 'estado k=' + k); assert.equal(reference(P, a.cfg.seed).hash, a.snapHash(a.snap()), 'referência k=' + k);
   }
   assert.ok(total >= 8, 'houve quedas suficientes (' + total + ')');
+});
+/* ---- ritmo do relógio, aviso de espera e caos (engasgos, quedas assimétricas, segundo plano) ---- */
+/** Entradas leves: a partida dura ~1600 passos (as aleatórias terminam em ~300). */
+function gentle(seed) { const r = lcg(seed); return (P) => { for (const h of [P.A, P.B]) { if (h.state() !== 'VERSUS') continue; if (r() % 40 === 0) V(h).input(V(h).me(), (r() >>> 20) % 5); } }; }
+/** Motor de reconexão falso: o cliente (B) faz join; o anfitrião (A) só aceita se estiver ouvindo (listen). Chame uma vez por passo, antes de P.tick. */
+function linker(P) {
+  let joins = 0, listens = 0, pj = false, pl = false;
+  return () => {
+    if ((P.T.a.listened || 0) > listens) { listens = P.T.a.listened; pl = true; }
+    if ((P.T.b.joins || 0) > joins) { joins = P.T.b.joins; pj = true; }
+    if (pj && !P.T.b.down && NetOf(P.B).st === 'reconnecting') {
+      pj = false;
+      if (pl && NetOf(P.A).st === 'reconnecting') { pl = false; P.T.a.closed = P.T.b.closed = false; NetOf(P.A)._ev({ e: 'connected', peer: 'b' }); NetOf(P.B)._ev({ e: 'connected', peer: 'a' }); }
+      else NetOf(P.B)._ev({ e: 'error', msg: 'recusada' });
+    }
+  };
+}
+/** Rede fora do ar: mensagens em trânsito se perdem; notify: 1 = só A recebe "closed", 2 = só B, 3 = os dois, 0 = ninguém percebe (meia-conexão). */
+function outage(P, notify) {
+  P.q.ab.length = 0; P.q.ba.length = 0; P.T.a.down = P.T.b.down = true; P.T.a.closed = P.T.b.closed = true;
+  if (notify & 1) NetOf(P.A)._ev({ e: 'closed', why: 'Conexão encerrada' }); if (notify & 2) NetOf(P.B)._ev({ e: 'closed', why: 'Conexão encerrada' });
+}
+const leadOf = (h) => V(h).ticks - (V(h).net.remoteUpto + 1);
+test('relógio: engasgo de um aparelho não deixa o outro "encostado" no limite da previsão para sempre (antes: aviso "Aguardando o oponente…" fixo com o jogo fluindo)', () => {
+  const P = startMatch(pair({ lat: 3, seed: 3 })), inp = gentle(3); let banner = 0, maxPaceLoss = 0;
+  for (let i = 0; i < 4000 && !(V(P.A).over && V(P.B).over); i++) {
+    P.frozen = [false, [200, 600, 1000].some((f) => i >= f && i < f + 25)];                  // B "engasga" (sem quadros) 3 vezes por ~0,4 s
+    P.tick(1, inp);
+    if (i > 1300) { if ((V(P.A).net.stall || 0) > V(P.A).STALL_SHOW_S) banner++; }
+    for (const h of [P.A, P.B]) if (V(h).net && V(h).net.pace) maxPaceLoss = Math.max(maxPaceLoss, 1 - V(h).net.pace);
+  }
+  assert.equal(banner, 0, 'sem aviso de espera depois de se recuperar'); assert.ok(leadOf(P.A) < 24, 'adiantamento voltou ao normal (' + leadOf(P.A) + ')');
+  assert.ok(maxPaceLoss <= V(P.A).PACE_MAX + 1e-9, 'nunca mais lento que ' + (100 * V(P.A).PACE_MAX) + '%');
+  const a = V(P.A), b = V(P.B); assert.ok(a.over && b.over); assert.equal(a.result.aborted, undefined); assert.equal(b.result.aborted, undefined); assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap()));
+});
+test('relógio: aparelhos com taxas de quadros diferentes (60/30/20 fps) e latência não ficam presos esperando nem dessincronizam', () => {
+  for (const [fps, lat, seed] of [[[1, 2], 3, 11], [[1, 3], 6, 12], [[2, 1], 4, 13], [[3, 2], 8, 14]]) {
+    const P = logInputs(startMatch(pair({ lat, jitter: 2, seed, fps }))), inp = gentle(seed); let waits = 0, n = 0;
+    for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) { P.tick(1, inp); n++; if (i > 1000 && [P.A, P.B].some((h) => (V(h).net.stall || 0) > 0.5)) waits++; }
+    const a = V(P.A), b = V(P.B); assert.ok(a.over && b.over, 'terminou fps=' + fps); assert.equal(a.result.aborted, undefined, a.result.reason); assert.equal(b.result.aborted, undefined, b.result.reason);
+    assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap())); assert.equal(reference(P, a.cfg.seed).hash, a.snapHash(a.snap()));
+    assert.ok(waits < 30, 'quase nunca esperando (fps=' + fps + ', ' + waits + ')');
+  }
+});
+test('aviso "Aguardando o oponente…" só aparece em espera de verdade (travado no limite) e some quando o oponente volta', () => {
+  const P = startMatch(pair({ lat: 3 })), inp = gentle(5); let shown = 0;
+  for (let i = 0; i < 600; i++) { P.frozen = [false, i >= 200 && i < 320]; P.tick(1, inp); if ((V(P.A).net.stall || 0) > V(P.A).STALL_SHOW_S) shown++; }       // B some por 2 s
+  assert.ok(shown > 20, 'avisou durante a espera real (' + shown + ')');
+  assert.equal(V(P.A).net.stall, 0, 'sumiu depois que o oponente voltou');
+  const Q = startMatch(pair({ lat: 3 })); let quiet = 0; for (let i = 0; i < 600; i++) { Q.tick(1, inp); if ((V(Q.A).net.stall || 0) > 0 || (V(Q.B).net.stall || 0) > 0) quiet++; } assert.equal(quiet, 0, 'sem espera nenhuma em condições normais');
+});
+test('mensagem isolada perdida (sem queda de conexão) é recuperada por reenvio e a partida segue igual nos dois lados', () => {
+  for (const seed of [21, 22, 23]) {
+    const P = logInputs(startMatch(pair({ lat: 3, jitter: 1, seed }))), inp = gentle(seed); let lost = 0;
+    for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) {
+      if (i % 150 === 100) { const arr = i % 300 === 100 ? P.q.ab : P.q.ba; if (arr.length) { arr.splice(arr.length - 1, 1); lost++; } }
+      P.tick(1, inp);
+    }
+    const a = V(P.A), b = V(P.B); assert.ok(lost >= 3 && a.over && b.over, 'perdeu ' + lost);
+    assert.equal(a.result.aborted, undefined, a.result.reason); assert.equal(b.result.aborted, undefined, b.result.reason);
+    assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap())); assert.equal(reference(P, a.cfg.seed).hash, a.snapHash(a.snap()));
+    assert.ok(P.sent.a.concat(P.sent.b).some((l) => JSON.parse(l).k === 'rs'), 'pediu reenvio');
+  }
+});
+test('revanche em sequência (com mensagens da partida anterior ainda em trânsito): sem espera presa, sem aborto, convergindo', () => {
+  const P = startMatch(pair({ lat: 4, seed: 19 })), inp = gentle(19);
+  for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+  for (let r = 0; r < 3; r++) {
+    NetOf(P.B).rematch();                                                    // o cliente pede; o anfitrião inicia
+    for (let i = 0; i < 400 && !(NetOf(P.A).st === 'playing' && NetOf(P.B).st === 'playing' && V(P.B).net && !V(P.B).over); i++) P.tick(1);
+    P.A.setState('VERSUS'); P.B.setState('VERSUS'); let stall = 0;
+    for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) { P.tick(1, inp); if ((V(P.A).net.stall || 0) > V(P.A).STALL_SHOW_S || (V(P.B).net.stall || 0) > V(P.A).STALL_SHOW_S) stall++; }
+    const a = V(P.A), b = V(P.B); assert.ok(a.over && b.over, 'revanche ' + r); assert.equal(a.result.aborted, undefined, a.result.reason); assert.equal(b.result.aborted, undefined, b.result.reason);
+    assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap())); assert.equal(stall, 0, 'sem espera presa na revanche ' + r);
+  }
+});
+test('latência alta (~0,45 s de ida) não faz o ritmo do relógio atrasar o jogo (o ajuste é só para engasgos, não para a latência normal)', () => {
+  const P = logInputs(startMatch(pair({ lat: 27, jitter: 2, seed: 31 }))), inp = gentle(31); let slow = 0, n = 0;
+  for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) { P.tick(1, inp); if (i > 300) { n++; if ([P.A, P.B].some((h) => V(h).net.pace && V(h).net.pace < 0.97)) slow++; } }
+  const a = V(P.A), b = V(P.B); assert.ok(a.over && b.over); assert.equal(a.result.aborted, undefined, a.result.reason); assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap()));
+  assert.ok(slow / n < 0.15, 'quase nunca mais devagar (' + Math.round(100 * slow / n) + '%)');
+});
+test('aviso na tela: "Aguardando o oponente…" só com espera real; "Reconectando…" com contagem quando a conexão cai; nada disso desenha erro', () => {
+  const P = startMatch(pair({ lat: 0 })), a = P.A, names = []; P.tick(40);
+  a.sb.__names = names; a.run("(function(){ const o = txt; txt = function (s) { __names.push(String(s)); return o.apply(null, arguments); }; })()");
+  const has = (re) => names.some((t) => re.test(t));
+  a.sb.render(); assert.equal(has(/Aguardando|Reconectando/), false, 'sem aviso em condições normais');
+  V(a).net.stall = 0.2; names.length = 0; a.sb.render(); assert.equal(has(/Aguardando/), false, 'espera curta não avisa');
+  V(a).net.stall = 1; names.length = 0; assert.doesNotThrow(() => a.sb.render()); assert.equal(has(/Aguardando o oponente/), true, 'espera real avisa');
+  drop(P); P.tick(120); names.length = 0; assert.doesNotThrow(() => a.sb.render());
+  assert.equal(has(/Reconectando/), true); assert.equal(has(/Partida parada · \d+ s/), true); assert.equal(has(/Aguardando o oponente/), false, 'reconectando tem o próprio aviso');
+});
+test('caos: engasgos, segundo plano, quedas só de um lado ou silenciosas (com latência, jitter e fps diferentes) sempre recuperam, convergem e nunca ficam presos', () => {
+  const mix = [[3, 1, 1, [1, 1]], [5, 2, 2, [1, 2]], [2, 0, 3, [1, 1]], [8, 3, 0, [2, 1]], [4, 1, 2, [1, 1]], [6, 2, 1, [1, 3]], [3, 0, 3, [1, 1]], [7, 3, 2, [3, 1]]];
+  mix.forEach(([lat, jit, notify, fps], k) => {
+    const r = lcg(900 + k), P = logInputs(startMatch(pair({ lat, jitter: jit, seed: 700 + k, fps }))), inp = gentle(300 + k), link = linker(P); let outAt = -1, outLen = 0, freezeAt = -1, freezeLen = 0, freezeWho = 0, fired = 0;
+    for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) {
+      if (fired < 3 && i > 150 && i > outAt + outLen + 80 && i > freezeAt + freezeLen + 80 && r() % 150 === 0) {
+        fired++; if (r() % 2) { outAt = i; outLen = 20 + (r() % 400); outage(P, notify); } else { freezeAt = i; freezeLen = 10 + (r() % 400); freezeWho = r() % 2; }
+      }
+      if (outAt >= 0 && i === outAt + outLen) { P.T.a.down = P.T.b.down = false; }
+      P.frozen = [false, false]; if (i >= freezeAt && i < freezeAt + freezeLen) P.frozen[freezeWho] = true;
+      link(); P.tick(1, inp);
+    }
+    const a = V(P.A), b = V(P.B); assert.ok(a.over && b.over, 'terminou k=' + k);
+    assert.equal(a.result.aborted, undefined, 'A k=' + k + ' ' + (a.result.reason || '')); assert.equal(b.result.aborted, undefined, 'B k=' + k + ' ' + (b.result.reason || ''));
+    assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap()), 'estado k=' + k); assert.equal(reference(P, a.cfg.seed).hash, a.snapHash(a.snap()), 'referência k=' + k);
+    assert.notEqual(NetOf(P.A).st, 'reconnecting'); assert.notEqual(NetOf(P.B).st, 'reconnecting');
+  });
 });
 test('reconexão desiste depois do prazo: partida interrompida SEM vencedor (não dá vitória a quem ficou nem derrota a quem caiu)', () => {
   const P = startMatch(pair()); P.tick(40); drop(P);

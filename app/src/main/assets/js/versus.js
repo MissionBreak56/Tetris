@@ -4,7 +4,7 @@
 const COMBO_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
 const GARBAGE_COLOR = '#707070';
 const Versus = {
-  PRED_MAX: 45, SNAP_WIN: 70,
+  PRED_MAX: 45, SNAP_WIN: 70, PACE_MAX: 0.2, PACE_GAIN: 0.02, LEAD_MARGIN: 6, STALL_SHOW_S: 0.35,
   active: false, net: null, cfg: null, B: [], pend: [0, 0], sent: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,
   layouts() {
     if (this.net) { this.cellV = CELL; this.lay = [L, L]; return; }          // online: cada um vê SÓ a sua tela (layout solo); gestos usam o tamanho de célula solo
@@ -88,12 +88,25 @@ const Versus = {
     this.stepBoards();
     if (this.B[0].overDone || this.B[1].overDone || this.ticks >= this.MAX_TICKS) this.finish();
   },
+  /** Ritmo do relógio online: quem está ADIANTADO em relação ao oponente (por ex. depois de um engasgo dele) anda até 20% mais devagar até o excesso de adiantamento
+      sumir, em vez de ficar encostado no limite da previsão para sempre ("Aguardando o oponente…" com o jogo fluindo). O adiantamento normal (≈ metade do ping + folga) não muda nada.
+      Só escala o tempo: os ticks seguem iguais nos dois lados (sem risco de dessincronia). */
+  netPace() {
+    const n = this.net; if (!n || !n.link) return 1;
+    const lead = this.ticks - (n.remoteUpto + 1);
+    n.lm = n.lm == null ? lead : Math.min(n.lm, lead);                                    // mínimo recente (janela ≈ 0,5 s): ignora o vaivém do ritmo das mensagens
+    if ((n.lmN = (n.lmN || 0) + 1) >= 30) { n.lmPrev = n.lm; n.lm = lead; n.lmN = 0; }
+    const m = n.lmPrev == null ? n.lm : Math.min(n.lm, n.lmPrev), rtt = Net.ping();
+    const target = Math.min(this.PRED_MAX - 9, Math.max(4, Math.round((rtt == null ? 100 : rtt) / 2 / (1000 / 60)) + this.LEAD_MARGIN)), over = m - target;
+    n.pace = over > 1 ? 1 - Math.min(this.PACE_MAX, (over - 1) * this.PACE_GAIN) : 1; return n.pace;
+  },
   frame(dt) {
-    this.acc += dt; let n = 0;
+    this.acc += this.net ? dt * this.netPace() : dt; let n = 0;
     if (this.net) {                                                   // previsão + correção: avança sem esperar o oponente (até PRED_MAX ticks)
       Net.pump(); this.netRollback();
       if (!this.net.link) { this.acc = 0; this.netCheck(); return; }          // conexão caída (reconectando): jogo parado para os dois, sem acumular tempo
       while (this.acc >= STEP && n < 6 && !this.over && state === 'VERSUS' && this.net && this.ticks - (this.net.remoteUpto + 1) < this.PRED_MAX) { this.acc -= STEP; this.netTick(); n++; }
+      { const nt = this.net; if (nt) nt.stall = this.acc >= STEP && this.ticks - (nt.remoteUpto + 1) >= this.PRED_MAX ? (nt.stall || 0) + dt : 0; }   // espera de verdade (travado no limite da previsão)
       if (this.acc > STEP * 6) this.acc = STEP * 6;
       if (this.net) { this.netCheck(); Net.pump(); }
       return;
@@ -213,7 +226,7 @@ Versus.unsnap = function (s, tick) {
   s.B.forEach((b, i) => restoreBoard(this.B[i], b)); this.pend = s.pend.slice(); this.sent = s.sent.slice(); this.rng.set(s.vr); this.ticks = tick;
 };
 /** Conexão caiu (false) ou voltou (true): com a conexão caída o jogo para dos dois lados (o oponente para sozinho ao esgotar a previsão). */
-Versus.netLink = function (ok) { if (!this.net) return; this.net.link = !!ok; if (!ok) this.acc = 0; };
+Versus.netLink = function (ok) { if (!this.net) return; this.net.link = !!ok; this.net.stall = 0; if (!ok) this.acc = 0; };
 Versus.netApply = function (t) {
   for (let i = 0; i < 2; i++) {
     const ev = this.net.q[i][t]; if (!ev) continue;
@@ -332,7 +345,7 @@ Versus.netHud = function (g, op, me) {
 Versus.netBanner = function (C) {
   const n = this.net; let msg = '', sub = '';
   if (Net.st === 'reconnecting') { msg = 'Reconectando…'; sub = 'Partida parada · ' + Math.max(0, Math.ceil((Net.GRACE_MS - (Net.now() - Net.rcAt)) / 1000)) + ' s'; }
-  else if (!this.over && this.ticks - (n.remoteUpto + 1) >= this.PRED_MAX - 3) { msg = 'Aguardando o oponente…'; }
+  else if (!this.over && (n.stall || 0) > this.STALL_SHOW_S) { msg = 'Aguardando o oponente…'; }
   if (!msg) return;
   const y = L.by + L.bh * 0.42, w = Math.min(L.bw, C * 9);
   ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(L.bx + (L.bw - w) / 2, y - C * 1.1, w, sub ? C * 2.6 : C * 1.7);
