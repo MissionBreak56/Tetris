@@ -58,7 +58,7 @@ function openAchievements() {
     const st = StatsMgr.load(); Achv.check(st);
     const list = Achv.progress(st), done = list.filter((a) => a.at), todo = list.filter((a) => !a.at);
     b.appendChild(kv('Desbloqueadas', done.length + ' / ' + list.length));
-    b.appendChild(kv('Estrelas ⭐', Rewards.stars()));
+    b.appendChild(kv('Estrelas ⭐', Rewards.balance() + ' disponíveis · ' + Rewards.stars() + ' ganhas'));
     const row = (a) => {
       const f = a.fmt || fmtNum, extra = a.reward ? (a.at ? ' · +' : ' · recompensa: ') + a.reward + ' ⭐' : '';
       return h('div', { class: 'achv' + (a.at ? ' done' : '') },

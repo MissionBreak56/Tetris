@@ -10,7 +10,16 @@ const THEMES=[
  ['#2433b8','#04051f','#6aa3ff','61,120,255','18,40,170','8,16,70','#2f58e6','#1a2f9e'],
  ['#5a1fa8','#12041f','#c39bff','150,80,255','70,20,150','28,10,66','#7a3fe0','#4a1a9e'],
  ['#12805a','#031a14','#62f2b8','30,200,140','10,110,80','4,40,30','#1fa070','#0d6a48'],
- ['#b8601c','#1f0d04','#ffb866','255,140,40','150,70,16','50,22,6','#e8802a','#a04a0c']];
+ ['#b8601c','#1f0d04','#ffb866','255,140,40','150,70,16','50,22,6','#e8802a','#a04a0c'],
+ // 4–11: temas que se desbloqueiam com estrelas (nomes e paletas das peças em themes.js: EXTRA_THEMES)
+ ['#a3206b','#1a0412','#ff8ccf','255,100,180','140,24,96','58,8,42','#df3f9a','#9a1a66'],
+ ['#0e6fa6','#02131f','#6fe0ff','60,190,240','10,100,150','4,36,56','#1f94cf','#0c5f8c'],
+ ['#a31e2a','#1a0407','#ff8a8f','255,80,90','140,20,30','56,8,12','#df3a46','#9a1822'],
+ ['#9a7a14','#1a1404','#ffe27a','255,210,70','130,100,10','50,38,4','#d7a928','#9a7410'],
+ ['#4a4f5c','#08090c','#c9d1e0','170,180,200','60,66,80','20,22,28','#6b7385','#40465a'],
+ ['#2b6a22','#050f04','#b7f36a','120,220,60','30,100,24','8,34,6','#46a038','#276820'],
+ ['#c2461f','#1f0a14','#ffb07a','255,120,80','150,50,30','56,12,16','#e86a3a','#a83a22'],
+ ['#3d7fb8','#04101c','#d6f1ff','140,200,255','40,100,150','8,32,52','#5fa4de','#35709f']];
 const TH=()=>Theme.arr();
 function applyTheme(){ Theme.invalidate(); Theme.applyPieces(); const t=TH(), u=Theme.ui(), st=document.documentElement.style, rgb=(h)=>hexRgb(h).join(',');
   st.setProperty('--acc',t[2]); st.setProperty('--glow',t[3]); st.setProperty('--dk',t[4]);
@@ -44,7 +53,7 @@ const readVol=k=>{ const v=parseFloat(LS(k)); return isFinite(v)?Math.min(1,Math
 function readSettings(){ return {
   sound: LS('isSound')!=='0', music: LS('isMusic')!=='0',
   ghost: LS('isShowGhost')!=='0', vib: LS('isVabiration')==='1',
-  touch: LS('isTouchControl')!=='0', theme: Theme.parseId(LS('index_bg')), skin: Skins.valid(LS('skin'))?LS('skin'):'classic',
+  touch: LS('isTouchControl')!=='0', theme: Theme.usable(Theme.parseId(LS('index_bg'))), skin: Skins.valid(LS('skin'))&&Skins.usable(LS('skin'))?LS('skin'):'classic', dyn: LS('dynTheme')==='1',
   musicVol: readVol('musicVol'), sfxVol: readVol('sfxVol'), fx: LS('isFx')!=='0', oppView: LS('oppView')!=='0',
   startLevel: Math.min(30,Math.max(1,parseInt(LS('startLevel'),10)||1)),
   vibMap: vibMapParse(Store.getJSON('vibMap',null)), perf: ['0','1','2'].includes(LS('isPerf'))?parseInt(LS('isPerf'),10):2
@@ -61,5 +70,5 @@ function saveSettings(){
   SV('isShowGhost',settings.ghost?1:0); SV('isVabiration',settings.vib?1:0);
   SV('isTouchControl',settings.touch?1:0); SV('index_bg',settings.theme); SV('skin',settings.skin);
   SV('startLevel',settings.startLevel); SV('musicVol',settings.musicVol); SV('sfxVol',settings.sfxVol); SV('isFx',settings.fx?1:0); SV('oppView',settings.oppView?1:0);
-  Store.setJSON('vibMap',settings.vibMap); SV('isPerf',settings.perf);
+  Store.setJSON('vibMap',settings.vibMap); SV('isPerf',settings.perf); SV('dynTheme',settings.dyn?1:0);
 }

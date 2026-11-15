@@ -16,7 +16,7 @@ const Store = {
 };
 /* Chaves que pertencem a um perfil (usadas para excluir perfil e para backup). Módulos novos registram as suas aqui. */
 Store.KEYS = ['isSound', 'isMusic', 'isShowGhost', 'isVabiration', 'isTouchControl', 'index_bg', 'skin', 'musicVol', 'sfxVol', 'isFx', 'oppView', 'startLevel',
-  'bestScore', 'bestScore2Minutes', 'bestScoreStrategy', 'bestSprintMs', 'stats', 'history', 'achv', 'rewards', 'daily', 'tut', 'ctl', 'themes', 'zenLevel', 'vibMap', 'isPerf'];
+  'bestScore', 'bestScore2Minutes', 'bestScoreStrategy', 'bestSprintMs', 'stats', 'history', 'achv', 'rewards', 'daily', 'tut', 'ctl', 'themes', 'zenLevel', 'vibMap', 'isPerf', 'spent', 'dynTheme', 'h2h', 'ghost'];
 Store.register = function (...ks) { ks.forEach((k) => { if (!Store.KEYS.includes(k)) Store.KEYS.push(k); }); };
 const LS = (k) => Store.get(k);
 const SV = (k, v) => { Store.set(k, v); };

@@ -32,6 +32,7 @@ function newGame(mode,opts){
       timeLeft:rules.timeLimit||120, timeAcc:0, b2b:false, over:false, rowOff:Array(ROWS).fill(0), overT:0,
       combo:0, maxCombo:0, tetrises:0, tspins:0, perfect:0, pieces:0, actions:0, ms:0, tick:0, rec:rules.tutorial?null:[] };
   refill(G.queue); refill(G.queue);
+  Theme.onGame(G);                                   // tema dinâmico (só solo)
   FX.parts.length=0; FX.flash.length=0; FX.lock.length=0; FX.trail=null; FX.shake=0; FX.pulse=0; FX.screen=null;
   spawn();
 }
@@ -154,7 +155,7 @@ function lockPiece(){
     if(!G.qBlock&&G.qCounter>=G.qThreshold) placeQuestion();
   }
   G.lines+=n;
-  while(G.rules.levelUps&&G.lines>=10*G.level&&G.level<30){ G.level++; showMsg('LEVEL '+G.level); FX.pulse=1; }
+  while(G.rules.levelUps&&G.lines>=10*G.level&&G.level<30){ G.level++; showMsg('LEVEL '+G.level); FX.pulse=1; Theme.onLevel(G); }
   if(n>0) tutEv('line');
   if(G.versus) Versus.onLock({n,tspin,b2b:gotB2B,perfect:pcl,gray:grayN});
   if(checkGoal()) return;

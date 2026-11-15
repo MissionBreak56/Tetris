@@ -3,7 +3,7 @@
    Arquivo JSON com checksum. Restauração: valida tudo antes, faz cópia de segurança, grava e confere; se algo falhar, volta ao estado anterior. */
 const Backup = {
   MAX_TEXT: 6000000, MAX_VALUE: 2500000,
-  JSON_KEYS: ['stats', 'history', 'achv', 'rewards', 'daily', 'tut', 'ctl', 'themes', 'replays', 'custom', 'tourney', 'tourneyWins', 'vibMap'],
+  JSON_KEYS: ['stats', 'history', 'achv', 'rewards', 'daily', 'tut', 'ctl', 'themes', 'replays', 'custom', 'tourney', 'tourneyWins', 'vibMap', 'spent', 'h2h', 'ghost'],
   /** Lê os dados atuais (strings brutas) de todos os perfis + chaves globais. */
   collect() {
     const data = { global: {}, profiles: {} };
