@@ -3,7 +3,7 @@
    Arquivo JSON com checksum. Restauração: valida tudo antes, faz cópia de segurança, grava e confere; se algo falhar, volta ao estado anterior. */
 const Backup = {
   MAX_TEXT: 6000000, MAX_VALUE: 2500000,
-  JSON_KEYS: ['stats', 'history', 'achv', 'rewards', 'daily', 'tut', 'ctl', 'themes', 'replays', 'custom', 'tourney', 'tourneyWins'],
+  JSON_KEYS: ['stats', 'history', 'achv', 'rewards', 'daily', 'tut', 'ctl', 'themes', 'replays', 'custom', 'tourney', 'tourneyWins', 'vibMap'],
   /** Lê os dados atuais (strings brutas) de todos os perfis + chaves globais. */
   collect() {
     const data = { global: {}, profiles: {} };
@@ -95,6 +95,7 @@ const Backup = {
 function openBackup() {
   Sheet.push('Backup e restauração', (b) => {
     b.appendChild(h('div', { class: 'hint', text: 'O backup inclui TODOS os perfis: estatísticas, histórico, recordes, conquistas, missões, temas, configurações, replays, desafios e torneios. Restaurar substitui os dados atuais.' }));
+    if (Native.available()) b.appendChild(h('div', { class: 'hint', text: '☁ Backup automático do Android: ligado. Seus dados (perfis, recordes, conquistas, temas, replays) vão para o backup do Google do aparelho e voltam sozinhos ao reinstalar o app ou trocar de celular. Precisa estar ativo em Configurações do Android › Google › Backup. O backup manual abaixo continua valendo para guardar uma cópia sua.' }));
     const out = h('div', { class: 'errs' });
     const text = () => Backup.text();
     b.appendChild(btn('Exportar: salvar arquivo', () => Native.saveFile('tetris-backup-' + Daily.dateKey() + '.json', 'application/json', text(), (ok) => { out.textContent = ok ? '✓ Backup salvo' : 'Não foi possível salvar'; out.className = 'errs' + (ok ? ' ok' : ''); })));

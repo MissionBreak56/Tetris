@@ -31,10 +31,12 @@ const sfx={
   skill:()=>{[660,880,1100].forEach((f,i)=>setTimeout(()=>tone(f,.1,'triangle',.12),i*80));}
 };
 /* Música de fundo: biblioteca em js/music.js (várias músicas no mesmo estilo; o andamento sobe um pouco a cada nível). */
+/** Nível que dita o andamento: o do jogo atual (no Versus/online, o do tabuleiro do jogador local). */
+function musicLevel(){ if(state==='VERSUS'&&Versus.active&&Versus.B&&Versus.B[Versus.me()]) return Versus.B[Versus.me()].level; return G&&G.level; }
 function musicTick(){
   musicTimer=null; if(!settings.music) return;
-  const ms=Music.stepMs(G&&G.level);
-  if(state==='PLAY'){
+  const ms=Music.stepMs(musicLevel());
+  if(state==='PLAY'||state==='VERSUS'){
     const s=Music.step(), d=ms*0.9375/1000;                 // nota de 15/16 do passo (como a original: 0,15 s em 160 ms)
     if(s.m) tone(s.m,d,'square',.05,0,'music');
     if(s.b) tone(s.b,d,'triangle',.06,0,'music');
@@ -45,7 +47,12 @@ function musicTick(){
 function startMusic(fresh){
   stopMusic(); if(!settings.music) return;
   if(fresh||!Music.cur) Music.begin();
-  musicTimer=setTimeout(musicTick,Music.stepMs(G&&G.level));
+  musicTimer=setTimeout(musicTick,Music.stepMs(musicLevel()));
 }
 function stopMusic(){ if(musicTimer){clearTimeout(musicTimer);musicTimer=null;} }
-function vib(ms){ if(settings.vib && navigator.vibrate) navigator.vibrate(ms); }
+/* Vibração: ligada/desligada em Preferências + intensidade por tipo de ação (0 desligada, 1 leve, 2 normal, 3 forte). */
+function vib(ms,kind){
+  if(SIM||!settings.vib||!navigator.vibrate) return;                       // simulação (oponente online, replays) nunca vibra
+  const lv=kind?(settings.vibMap&&Number.isInteger(settings.vibMap[kind])?settings.vibMap[kind]:VIB_DEFAULT[kind]):2, v=vibScaled(ms,lv);
+  if(v!==null) navigator.vibrate(v);
+}

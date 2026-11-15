@@ -3,6 +3,11 @@
 const Native = {
   _saved: null, _picked: null,
   available() { return typeof AndroidBridge !== 'undefined'; },
+  /** { level 0-100, charging, saver } ou null fora do app (navegador). */
+  battery() {
+    try { if (this.available() && typeof AndroidBridge.battery === 'function') { const s = AndroidBridge.battery(); if (s) { const o = JSON.parse(s); return { level: num(o.level, 100), charging: !!o.charging, saver: !!o.saver }; } } } catch (e) {}
+    return null;
+  },
   share(title, text) { if (this.available()) { AndroidBridge.share(title, text); return true; } return false; },
   saveFile(name, mime, text, cb) {
     this._saved = cb || null;

@@ -20,7 +20,7 @@ function startGame(mode,opts){
 function gameOver(reason){
   if(!G||G.overDone) return; G.overDone=true;
   if(G.replay||G.versus) return;            // replay/versus: quem encerra e grava é o respectivo controlador
-  state='OVER'; G.overT=0; stopMusic(); sfx.gameover(); vib([80,60,80]);
+  state='OVER'; G.overT=0; stopMusic(); sfx.gameover(); vib([80,60,80],'over');
   FX.shake=CELL*0.4;
   const res=Results.compile(G,reason), rec=Results.commit(res);
   Results.render(res,rec);
@@ -96,7 +96,8 @@ function update(dt){
 }
 function updateFx(dt){
   FX.t+=dt;
-  if(!settings.fx){ FX.shake=0; FX.parts.length=0; FX.screen=null; FX.pulse=0; }
+  const lite=Perf.save();                                       // economia: sem partículas/tremor/clarão e fundo parado
+  if(!settings.fx||lite){ FX.shake=0; FX.parts.length=0; FX.screen=null; FX.pulse=0; }
   for(let i=FX.parts.length-1;i>=0;i--){ const q=FX.parts[i];
     q.life-=dt; if(q.life<=0){FX.parts.splice(i,1);continue;}
     q.vy+=CELL*22*dt; q.x+=q.vx*dt; q.y+=q.vy*dt; }
@@ -106,8 +107,10 @@ function updateFx(dt){
   if(FX.screen){ FX.screen.t-=dt; if(FX.screen.t<=0) FX.screen=null; }
   FX.shake*=Math.exp(-dt*9); if(FX.shake<.2) FX.shake=0;
   FX.pulse=Math.max(0,FX.pulse-dt*1.3);
-  BG.stars.forEach(s=>{ s.y-=s.v*dt; if(s.y<-.02){ s.y=1.02; s.x=Math.random(); } });
-  BG.fall.forEach(f=>{ f.y+=f.v*dt; f.r+=f.rs*dt; if(f.y>1.15){ f.y=-.2; f.x=Math.random(); f.t=pickT(); } });
+  if(!lite){
+    BG.stars.forEach(s=>{ s.y-=s.v*dt; if(s.y<-.02){ s.y=1.02; s.x=Math.random(); } });
+    BG.fall.forEach(f=>{ f.y+=f.v*dt; f.r+=f.rs*dt; if(f.y>1.15){ f.y=-.2; f.x=Math.random(); f.t=pickT(); } });
+  }
   // suavização visual de CADA tabuleiro em jogo (no Versus são dois; antes só o G global — o tabuleiro 1 ficava com a peça parada/apagada)
   (Versus.active ? Versus.B : (G ? [G] : [])).forEach((g)=>smoothBoard(g,dt));
 }

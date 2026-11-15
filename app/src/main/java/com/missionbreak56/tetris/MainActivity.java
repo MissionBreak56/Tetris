@@ -3,6 +3,9 @@ package com.missionbreak56.tetris;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.os.BatteryManager;
+import android.os.PowerManager;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.net.Uri;
@@ -88,6 +91,19 @@ public class MainActivity extends Activity {
                 i.putExtra(Intent.EXTRA_TITLE, name);
                 startActivityForResult(i, REQ_SAVE);
             } });
+        }
+        /** Bateria para o modo "Automático" de desempenho: {"level":0-100,"charging":bool,"saver":bool} (texto vazio se indisponível). */
+        @JavascriptInterface
+        public String battery() {
+            try {
+                Intent b = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+                if (b == null) return "";
+                int level = b.getIntExtra(BatteryManager.EXTRA_LEVEL, -1), scale = b.getIntExtra(BatteryManager.EXTRA_SCALE, 100), plugged = b.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
+                PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                boolean saver = pm != null && pm.isPowerSaveMode();
+                int pct = level < 0 ? 100 : (level * 100) / Math.max(1, scale);
+                return "{\"level\":" + pct + ",\"charging\":" + (plugged != 0) + ",\"saver\":" + saver + "}";
+            } catch (Exception e) { return ""; }
         }
         // ---- Rede local (modo online) ----
         @JavascriptInterface public void lanHost(String name, int port) { lock(true); wifiLowLatency(true); lan().host(name, port); }

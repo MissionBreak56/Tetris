@@ -22,7 +22,7 @@ const Skins = {
   _sprites: new Map(),
   /** Bloco pré-renderizado (uma única drawImage por bloco no Canvas principal). Margem para o brilho do neon. */
   sprite(color, s, id) {
-    const key = id + '|' + color + '|' + Math.round(s * 100);
+    const key = id + '|' + color + '|' + Math.round(s * 100) + (typeof Perf !== 'undefined' && Perf.save() ? 's' : '');
     let sp = this._sprites.get(key); if (sp) return sp;
     const d = typeof dpr === 'number' ? dpr : 1, m = Math.ceil(s * 0.3), w = s + 2 * m;
     const cv = document.createElement('canvas'); cv.width = cv.height = Math.max(1, Math.ceil(w * d));
@@ -48,7 +48,7 @@ const Skins = {
     } else if (k === 'neon') {
       const lw = Math.max(1.5, s * 0.12);
       c.fillStyle = 'rgba(0,0,0,.55)'; c.fillRect(x, y, s, s);
-      c.save(); c.shadowColor = color; c.shadowBlur = s * 0.3;
+      c.save(); c.shadowColor = color; c.shadowBlur = typeof Perf !== 'undefined' && Perf.save() ? 0 : s * 0.3;
       c.strokeStyle = color; c.lineWidth = lw; c.strokeRect(x + lw, y + lw, s - 2 * lw, s - 2 * lw); c.restore();
       c.globalAlpha = (alpha == null ? 1 : alpha) * 0.3; c.fillStyle = color; c.fillRect(x + lw, y + lw, s - 2 * lw, s - 2 * lw);
     } else if (k === 'gradient') {

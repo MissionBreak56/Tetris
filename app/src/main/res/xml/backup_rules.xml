@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup automático (Android 6–11): guarda só os dados do jogo (localStorage da WebView: perfis, recordes, conquistas, temas, replays...). Cache fica de fora. -->
+<full-backup-content>
+    <include domain="root" path="app_webview/Default/Local Storage" />
+    <exclude domain="root" path="app_webview/Default/Local Storage/leveldb/LOCK" />
+</full-backup-content>

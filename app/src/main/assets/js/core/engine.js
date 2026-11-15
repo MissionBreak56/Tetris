@@ -46,7 +46,7 @@ function spawn(){
 }
 function move(dx){
   const p=G.active; if(!p) return false;
-  if(!collides(cells(p.t,p.rot,p.x+dx,p.y),G.grid)){ p.x+=dx; sfx.move(); G.lockT=0; tutEv('move'); return true; }
+  if(!collides(cells(p.t,p.rot,p.x+dx,p.y),G.grid)){ p.x+=dx; sfx.move(); vib(5,'move'); G.lockT=0; tutEv('move'); return true; }
   return false;
 }
 function rotate(dir){
@@ -54,7 +54,7 @@ function rotate(dir){
   const nr=(p.rot+dir+4)%4;
   for(const [kx,ky] of KICKS){
     if(!collides(cells(p.t,nr,p.x+kx,p.y+ky),G.grid)){
-      p.rot=nr; p.x+=kx; p.y+=ky; sfx.rotate(); G.lastRot=true; G.lockT=0; tutEv('rotate'); return true;
+      p.rot=nr; p.x+=kx; p.y+=ky; sfx.rotate(); vib(8,'rotate'); G.lastRot=true; G.lockT=0; tutEv('rotate'); return true;
     }
   }
   return false;
@@ -71,7 +71,7 @@ function hardDrop(){
   const bottoms={}; end.forEach(([x,y])=>{ bottoms[x]=Math.max(bottoms[x]??-99,y); });
   FX.trail={cols:Object.keys(cols).map(x=>({x:+x,y0:cols[x],y1:bottoms[x]})),color:COLORS[p.t],t:.25,max:.25,b:G.vi};
   FX.shake=Math.max(FX.shake,CELL*0.1);
-  sfx.dropFast(); vib(30); lockPiece();
+  sfx.dropFast(); vib(30,'hard'); lockPiece();
 }
 function hold(){
   const p=G.active; if(!p||!G.canHold||G.rules.noHold) return;
@@ -114,7 +114,7 @@ function lockPiece(){
     gameOver(); return; }
   cs.forEach(([x,y])=>{ G.grid[y][x]=COLORS[p.t]; FX.lock.push({x,y,t:.28,b:G.vi}); });
   const tspin=isTSpin(p,G.grid);
-  sfx.drop();
+  sfx.drop(); vib(14,'lock');
   const cleared=[];
   for(let r=0;r<ROWS;r++) if(G.grid[r].every(c=>c)) cleared.push(r);
   const n=cleared.length;
@@ -147,7 +147,7 @@ function lockPiece(){
   const gotB2B=special&&n>0&&G.b2b;
   if(gotB2B){pts*=1.5;name='BACK TO BACK '+name;}
   if(special) G.b2b=true; else if(n>0) G.b2b=false;
-  if(n>0||tspin){ G.score+=Math.round(pts); showMsg(name); (n>=4?sfx.tetris:sfx.line)(); vib(40); }
+  if(n>0||tspin){ G.score+=Math.round(pts); showMsg(name); (n>=4?sfx.tetris:sfx.line)(); vib(40,'clear'); }
   if(pcl) showMsg2('PERFECT CLEAR'); else if(G.combo>=2) showMsg2('COMBO x'+G.combo);
   if(G.rules.skills){
     G.qCounter+=n;
@@ -193,5 +193,5 @@ function triggerSkill(){
       if(!g[r][c]){ g[r][c]=Object.values(COLORS)[(rnd()*7)|0]; burst(c,r,g[r][c],3); n++; } } }
   if(G.rules.skills){ G.mult+=0.5; G.qThreshold=5; G.qCounter=0; }
   FX.screen={c:SKILL_RGB[s]||'255,255,255',t:.5,max:.5}; FX.shake=Math.max(FX.shake,CELL*0.3); FX.pulse=1;
-  showMsg(s); sfx.skill(); vib([40,60,40]);
+  showMsg(s); sfx.skill(); vib([40,60,40],'skill');
 }

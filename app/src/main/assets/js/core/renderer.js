@@ -86,7 +86,7 @@ function drawBackground(){
     c.fillStyle=rg; c.fillRect(0,0,W,H);
   });
   ctx.drawImage(bg,0,0,W,H);
-  BG.fall.forEach(f=>{
+  if(!Perf.save()) BG.fall.forEach(f=>{
     const cs=SHAPES[f.t].rot[f.r%4], s=CELL*f.k, x0=f.x*W, y0=f.y*H;
     cs.forEach(([cx,cy])=>drawBlock(x0+cx*s,y0+cy*s,s,COLORS[f.t],.10));
   });

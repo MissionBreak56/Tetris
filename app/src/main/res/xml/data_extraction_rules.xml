@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backup na nuvem e transferência para outro aparelho (Android 12+): os mesmos dados do jogo. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="root" path="app_webview/Default/Local Storage" />
+        <exclude domain="root" path="app_webview/Default/Local Storage/leveldb/LOCK" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="root" path="app_webview/Default/Local Storage" />
+        <exclude domain="root" path="app_webview/Default/Local Storage/leveldb/LOCK" />
+    </device-transfer>
+</data-extraction-rules>
