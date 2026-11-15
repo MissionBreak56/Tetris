@@ -22,7 +22,7 @@ $('bTutorial').onclick=()=>{sfx.click();Modes.openFromHome('tutorial');};
 $('bOnline').onclick=()=>{sfx.click();Modes.openFromHome('online');};
 $('bLevel').onclick=()=>{sfx.click();Hub.open();};
 $('sheetBack').onclick=()=>{sfx.click();Sheet.back();};
-$('bTheme').onclick=()=>{const ids=Theme.ids(), i=ids.indexOf(settings.theme); settings.theme=ids[(i+1)%ids.length]; saveSettings(); applyTheme(); sfx.click();};
+$('bTheme').onclick=()=>{const ids=Theme.ids().filter(id=>!Theme.isLocked(id)), i=ids.indexOf(settings.theme); settings.theme=ids[(i+1)%ids.length]; saveSettings(); applyTheme(); sfx.click();};   // pula os bloqueados
 function openLevelSheet(){
   Sheet.open('Nível inicial',(b)=>{
     const g=h('div',{class:'grid'});

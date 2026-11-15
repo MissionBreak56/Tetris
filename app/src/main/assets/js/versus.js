@@ -46,7 +46,7 @@ const Versus = {
   },
   start(cfg) {
     try { ac(); } catch (e) {}
-    hideAll(); showTutBanner(false); Replay.stop();
+    hideAll(); showTutBanner(false); Replay.stop(); Theme.clearOverride();
     this.create(cfg); this.active = true;
     $('pauseBtn').style.display = 'flex';
     let n = 3; state = 'COUNT'; const cd = $('count'); cd.style.display = 'flex';

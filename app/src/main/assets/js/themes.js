@@ -13,6 +13,17 @@ const BUILTIN_UI = [
   { panel1: '#073525', panel2: '#031a12', btn1: '#168257', btn2: '#0d6a48', btnSmall: '#04281e', ink: '#ffffff', dim: '#a6e8cf', val: '#ffd54a' },
   { panel1: '#3d1c08', panel2: '#1f0d04', btn1: '#c25f17', btn2: '#a04a0c', btnSmall: '#321606', ink: '#ffffff', dim: '#f0c9a0', val: '#ffe08a' },
 ];
+/** Temas 4–11 (desbloqueados com estrelas): nome e paleta das peças. Cores da interface vêm de Theme.deriveUi(destaque). */
+const EXTRA_THEMES = {
+  4: { name: 'Rosa', pieces: { I: '#ff9ad5', J: '#7f6bff', L: '#ff8a3c', O: '#ffe45c', S: '#7fe388', T: '#d04bff', Z: '#ff4d6b' } },
+  5: { name: 'Oceano', pieces: { I: '#6fe0ff', J: '#4d7dff', L: '#ff8a3c', O: '#ffe45c', S: '#5be3a3', T: '#b98cff', Z: '#ff5f7a' } },
+  6: { name: 'Rubi', pieces: { I: '#ffa0a6', J: '#6f98ff', L: '#ff8a3c', O: '#ffe066', S: '#6fe07a', T: '#d78bff', Z: '#ff3d50' } },
+  7: { name: 'Ouro', pieces: { I: '#9ae6ff', J: '#6f9fff', L: '#ff9a3c', O: '#ffe27a', S: '#8be36f', T: '#e49bff', Z: '#ff4a4a' } },
+  8: { name: 'Grafite', pieces: { I: '#cfd8e8', J: '#6f8fe8', L: '#f0963a', O: '#f2e27a', S: '#7fd6a0', T: '#b07fe0', Z: '#e86a6a' } },
+  9: { name: 'Floresta', pieces: { I: '#7fe3d0', J: '#5d90ff', L: '#ff9a3c', O: '#ffe45a', S: '#a6f05a', T: '#c38cff', Z: '#ff4a52' } },
+  10: { name: 'Pôr do sol', pieces: { I: '#9fe6ff', J: '#7f9aff', L: '#ff8a3c', O: '#fff07a', S: '#8fe07a', T: '#ff6ab8', Z: '#ff4a4a' } },
+  11: { name: 'Gelo', pieces: { I: '#d6f1ff', J: '#6f9eff', L: '#ffa860', O: '#fff08a', S: '#7fe8b8', T: '#b493ff', Z: '#ff7a96' } },
+};
 const hexRgb = (hx) => { const n = parseInt(hx.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
 const rgbHex = (a) => '#' + a.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
 const mixHex = (a, b, t) => { const x = hexRgb(a), y = hexRgb(b); return rgbHex(x.map((v, i) => v + (y[i] - v) * t)); };
@@ -24,6 +35,10 @@ const Theme = {
   MIN_CONTRAST: 2.5, MIN_PIECE_DIST: 60,
   builtin(i) {
     const t = THEMES[i];
+    if (EXTRA_THEMES[i]) {
+      const x = EXTRA_THEMES[i];
+      return Object.assign({ id: i, name: x.name, bg1: t[0], bg2: t[1], acc: t[2], board1: '#000000', board2: mixHex(t[1], '#000000', 0.3), grid: rgbHex(t[3].split(',').map(Number)), ghost: t[2], pieces: Object.assign({}, x.pieces), builtin: true }, this.deriveUi(t[2]));
+    }
     return Object.assign({ id: i, name: ['Azul', 'Roxo', 'Verde', 'Laranja'][i] || 'Tema ' + (i + 1), bg1: t[0], bg2: t[1], acc: t[2], board1: '#000000', board2: '#020721', grid: rgbHex(t[3].split(',').map(Number)), ghost: '#2a86d6', pieces: Object.assign({}, DEFAULT_PIECES), builtin: true }, BUILTIN_UI[i] || BUILTIN_UI[0]);
   },
   customs() {
@@ -32,12 +47,27 @@ const Theme = {
   },
   saveCustoms(list) { return Store.setJSON('themes', list.slice(0, MAX_CUSTOM_THEMES)); },
   ids() { return THEMES.map((_, i) => i).concat(this.customs().map((c) => c.id)); },
+  /** Tema embutido liberado? (os 4 originais e os personalizados sempre; 4–11 só depois de desbloquear com estrelas) */
+  usable(id) { return typeof id !== 'number' || Rewards.unlocked('theme:' + id) ? id : 0; },
+  isLocked(id) { return typeof id === 'number' && !Rewards.unlocked('theme:' + id); },
+  /* Tema dinâmico: muda sozinho a cada 3 níveis (só jogos solo), percorrendo os embutidos desbloqueados a partir do escolhido. Não altera a escolha salva. */
+  override: null,
+  dynList() { return THEMES.map((_, i) => i).filter((i) => Rewards.unlocked('theme:' + i)); },
+  dynFor(level) { const l = this.dynList(), b = typeof settings.theme === 'number' ? Math.max(0, l.indexOf(settings.theme)) : 0; return l[(b + Math.floor((Math.max(1, level) - 1) / 3)) % l.length]; },
+  setOverride(id) {
+    if (this.override === id) return;
+    const old = Object.assign({}, COLORS); this.override = id; applyTheme();
+    if (typeof G !== 'undefined' && G && G.grid) for (const row of G.grid) for (let c = 0; c < row.length; c++) { const col = row[c]; if (!col) continue; const k = PIECE_KEYS.find((x) => old[x] === col); if (k) row[c] = COLORS[k]; }   // peças já travadas acompanham a nova paleta
+  },
+  onGame(g) { if (settings.dyn && !SIM && !(typeof Versus !== 'undefined' && Versus.active) && g && g.mode <= 7) this.setOverride(this.dynFor(g.level)); else this.clearOverride(); },
+  onLevel(g) { if (settings.dyn && this.override != null && !SIM && g && g.mode <= 7) this.setOverride(this.dynFor(g.level)); },
+  clearOverride() { if (this.override != null) this.setOverride(null); },
   get(id) { if (typeof id === 'number' && THEMES[id]) return this.builtin(id); return this.customs().find((c) => c.id === id) || null; },
   /** Tema ativo. Se o salvo não existe/está inválido, volta ao padrão (0). */
   /** Tema ativo (em cache: o desenho consulta isso várias vezes por quadro). Invalidado por applyTheme()/save/remove. */
   _c: null,
   invalidate() { this._c = null; },
-  cur() { if (this._c && this._c.id === settings.theme) return this._c.t; const t = this.get(settings.theme) || this.builtin(0); this._c = { id: settings.theme, t }; return t; },
+  cur() { const id = this.override != null ? this.override : settings.theme; if (this._c && this._c.id === id) return this._c.t; const t = this.get(id) || this.builtin(0); this._c = { id, t }; return t; },
   parseId(v) { if (v == null || v === '') return 0; if (/^c\d+$/.test(String(v))) return String(v); const n = parseInt(v, 10); return isFinite(n) && n >= 0 && n < THEMES.length ? n : 0; },
   /** Array compatível com TH(): [bg1,bg2,acc,glowRGB,frameRGB,btnRGB,grad1,grad2] */
   arr() {
@@ -106,7 +136,7 @@ const Theme = {
   },
   blank() { const b = this.builtin(0), o = { id: null, name: 'Meu tema', bg1: b.bg1, bg2: b.bg2, acc: b.acc, board1: b.board1, board2: b.board2, grid: b.grid, ghost: b.ghost, pieces: Object.assign({}, DEFAULT_PIECES) }; UI_KEYS.forEach((k) => { o[k] = b[k]; }); return o; },
 };
-function selectTheme(id) { settings.theme = id; saveSettings(); applyTheme(); }
+function selectTheme(id) { if (Theme.isLocked(id)) return false; settings.theme = id; saveSettings(); if (Theme.override != null) Theme.override = null; applyTheme(); return true; }
 function drawThemePreview(cv, t) {
   const c = cv.getContext('2d'), W = 220, H = 120;
   let g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, t.bg1); g.addColorStop(1, t.bg2); c.fillStyle = g; c.fillRect(0, 0, W, H);
@@ -133,19 +163,24 @@ function drawUiPreview(cv, t) {
 }
 function openThemes() {
   Sheet.push('Temas', (b) => {
+    b.appendChild(kv('Estrelas ⭐ disponíveis', Rewards.balance()));
+    b.appendChild(toggleBtn('Tema dinâmico (muda a cada 3 níveis)', () => settings.dyn, (v) => { settings.dyn = v; saveSettings(); if (!v) Theme.clearOverride(); }));
+    const msg = h('div', { class: 'errs' });
     Theme.ids().forEach((id) => {
-      const t = Theme.get(id), sel = settings.theme === id;
+      const t = Theme.get(id), sel = settings.theme === id, locked = Theme.isLocked(id), cost = Rewards.cost('theme:' + id);
       const chips = h('div', { class: 'chips' }, [t.bg1, t.acc, t.pieces.I, t.pieces.J, t.pieces.L, t.pieces.O, t.pieces.S, t.pieces.T, t.pieces.Z].map((c) => h('i', { style: 'background:' + c })));
-      const row = h('div', { class: 'skinrow' + (sel ? ' sel' : '') }, h('div', { class: 'kv', onclick: () => { sfx.click(); selectTheme(id); Sheet.refresh(); } }, h('span', { text: t.name + (sel ? ' ●' : '') + (t.builtin ? '' : ' (personalizado)') })), chips);
+      const row = h('div', { class: 'skinrow' + (sel ? ' sel' : '') }, h('div', { class: 'kv', onclick: () => { sfx.click(); if (locked) { msg.textContent = 'Desbloqueie este tema com ' + cost + ' ⭐'; return; } selectTheme(id); Sheet.refresh(); } }, h('span', { text: t.name + (sel ? ' ●' : '') + (t.builtin ? '' : ' (personalizado)') + (locked ? ' 🔒 ' + cost + ' ⭐' : '') })), chips);
       if (!t.builtin) {
         const r = h('div', { class: 'row' });
         r.appendChild(btn('Editar', () => openThemeEditor(id))); r.appendChild(btn('Duplicar', () => { Theme.duplicate(id); Sheet.refresh(); }));
         r.appendChild(btn('Exportar', () => openThemeExport(id)));
         r.appendChild(btn('Excluir', () => Confirm.ask('Excluir o tema "' + t.name + '"?', () => { Theme.remove(id); Sheet.refresh(); }), 'danger'));
         row.appendChild(r);
-      } else row.appendChild(btn('Duplicar para editar', () => { const n = Theme.duplicate(id); Sheet.refresh(); if (n) openThemeEditor(n); }));
+      } else if (locked) row.appendChild(btn('Desbloquear (' + cost + ' ⭐)', () => { const r = Rewards.unlock('theme:' + id); if (r.ok) { selectTheme(id); Sheet.refresh(); } else msg.textContent = r.error; }));
+      else row.appendChild(btn('Duplicar para editar', () => { const n = Theme.duplicate(id); Sheet.refresh(); if (n) openThemeEditor(n); }));
       b.appendChild(row);
     });
+    b.appendChild(msg);
     b.appendChild(btn('Novo tema', () => openThemeEditor(null), ''));
     b.appendChild(btn('Importar tema (JSON)', openThemeImport));
   });
