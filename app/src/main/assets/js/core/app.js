@@ -39,6 +39,7 @@ $('rpSpeed').onclick=()=>{sfx.click();Replay.speed();};
 $('rpExit').onclick=()=>{sfx.click();goMenu();};
 $('tutOk').onclick=()=>{sfx.click();Tut.event('ok');};
 $('tutSkip').onclick=()=>{sfx.click();Tut.skip();};
+$('bEmote').onclick=()=>{sfx.click();Social.togglePal();};
 $('bRetry').onclick=()=>{sfx.click();if(Versus.net||(Versus.cfg&&Versus.cfg.net)){Net.rematch();return;}startGame(G?G.mode:1,G?G.opts:undefined);};
 $('bEndHome').onclick=()=>{sfx.click();goMenu();};
 $('pauseBtn').onclick=()=>{ if(state==='PLAY'||state==='VERSUS'){sfx.click();pauseGame();} };
@@ -51,5 +52,6 @@ function showMsg2(t){ if(SIM) return; if(Versus.attachNote(t)) return; const m=$
 /* ================= INIT ================= */
 applyTheme(); initBG(); resize(); addEventListener('resize',resize);
 refreshMenu(); requestAnimationFrame(loop);
+if(Profile.hasPin(Profile.cur())) Lock.show();      // perfil protegido: PIN antes de qualquer coisa
 /* Revela a interface só depois do tema + layout + 1º quadro desenhado (o loop acima roda antes neste mesmo quadro): sem "piscar" de botões empilhados na cor padrão. */
 requestAnimationFrame(()=>{ const d=document.documentElement; if(d.classList) d.classList.remove('boot'); });

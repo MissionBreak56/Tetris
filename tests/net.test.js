@@ -388,14 +388,26 @@ test('botão pausar/voltar no online pede confirmação de desistência (não pa
   assert.equal(P.A.state(), 'VERSUS'); assert.equal(P.A.els.confirmBox.classList.contains('on'), true);
   P.A.els.confirmYes.onclick(); assert.equal(V(P.A).over, true); assert.equal(V(P.A).result.winner, 1);
 });
-test('revanche: anfitrião inicia nova partida; cliente pede e o anfitrião inicia; volta ao menu encerra a conexão', () => {
-  const P = logInputs(startMatch(pair())); playOut(P, 3);
-  assert.equal(NetOf(P.A).st, 'ended');
-  NetOf(P.B).rematch(); for (let i = 0; i < 100 && !(NetOf(P.A).st === 'playing' && NetOf(P.B).st === 'playing'); i++) P.tick(1);
-  assert.equal(NetOf(P.A).st, 'playing'); assert.equal(NetOf(P.B).st, 'playing'); assert.equal(V(P.A).ticks <= 2, true); assert.equal(V(P.A).result, null);
-  P.A.setState('VERSUS'); P.B.setState('VERSUS'); P.log.length = 0; playOut(P, 4);
-  assert.deepEqual(plain(V(P.A).result), plain(V(P.B).result));
-  P.A.sb.goMenu(); assert.equal(NetOf(P.A).st, 'idle'); assert.equal(P.T.a.closed, true); assert.ok(P.sent.a.some((l) => JSON.parse(l).k === 'bye'));
+test('revanche: só começa quando os DOIS pedem (qualquer ordem); a tela final mostra o estado; volta ao menu encerra a conexão', () => {
+  for (const first of ['B', 'A']) {
+    const P = logInputs(startMatch(pair())); playOut(P, 3);
+    assert.equal(NetOf(P.A).st, 'ended'); const second = first === 'A' ? 'B' : 'A';
+    NetOf(P[first]).rematch(); for (let i = 0; i < 90; i++) P.tick(1);
+    assert.equal(NetOf(P.A).st, 'ended', 'só um quer: não começa (' + first + ')'); assert.equal(NetOf(P.B).st, 'ended'); assert.equal(NetOf(P[first]).ready, true); assert.equal(NetOf(P[second]).peerReady, true);
+    NetOf(P[second]).rematch(); for (let i = 0; i < 100 && !(NetOf(P.A).st === 'playing' && NetOf(P.B).st === 'playing'); i++) P.tick(1);
+    assert.equal(NetOf(P.A).st, 'playing'); assert.equal(NetOf(P.B).st, 'playing'); assert.equal(V(P.A).ticks <= 2, true); assert.equal(V(P.A).result, null);
+    assert.equal(NetOf(P.A).ready, false, 'flags zeradas na nova partida'); assert.equal(NetOf(P.B).peerReady, false);
+    P.A.setState('VERSUS'); P.B.setState('VERSUS'); P.log.length = 0; playOut(P, 4);
+    assert.deepEqual(plain(V(P.A).result), plain(V(P.B).result));
+    if (first === 'B') { P.A.sb.goMenu(); assert.equal(NetOf(P.A).st, 'idle'); assert.equal(P.T.a.closed, true); assert.ok(P.sent.a.some((l) => JSON.parse(l).k === 'bye')); }
+  }
+});
+test('revanche: pedido do oponente que chega ANTES de a minha partida terminar não se perde', () => {
+  const P = startMatch(pair({ lat: 0 })), inp = gentle(77); P.tick(20);
+  NetOf(P.A)._line(JSON.stringify({ k: 'again' })); assert.equal(NetOf(P.A).peerReady, true, 'guardado mesmo jogando');
+  for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+  assert.equal(NetOf(P.A).st, 'ended'); assert.equal(NetOf(P.A).peerReady, true);
+  NetOf(P.A).rematch(); for (let i = 0; i < 100 && NetOf(P.A).st !== 'playing'; i++) P.tick(1); assert.equal(NetOf(P.A).st, 'playing', 'ao eu aceitar, começa na hora');
 });
 test('tela Online: estados e indisponível fora do Android', () => {
   const h = load(1); assert.equal(NetOf(h).available(), false);

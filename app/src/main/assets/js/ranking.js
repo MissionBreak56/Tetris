@@ -40,6 +40,8 @@ const Ranking = {
   clearProfile(pid) { this.removeProfile(pid); },
   clear() { Store.gset('ranking', '{}'); },
   nameOf(e) { const p = Profile.list().find((x) => x.id === e.pid); return p ? p.name : e.n; },
+  /** Avatar + nome (para as telas). */
+  label(e) { const p = Profile.list().find((x) => x.id === e.pid); return p ? Profile.avatar(p) + ' ' + p.name : e.n; },
 };
 /** sel: modalidade; all: true = "Todos os perfis" (melhor de cada); false = só o perfil atual. */
 function openRanking(sel, all) {
@@ -51,7 +53,7 @@ function openRanking(sel, all) {
     b.appendChild(h('div', { class: 'hint', text: all ? 'Melhor resultado de cada perfil deste aparelho' : 'Ranking do perfil: ' + me.name }));
     const list = all ? Ranking.best(sel) : Ranking.of(me.id, sel);
     if (!list.length) b.appendChild(h('div', { class: 'sub', text: all ? 'Ainda sem resultados nesta modalidade.' : 'Ainda sem resultados deste perfil nesta modalidade.' }));
-    list.forEach((e, i) => b.appendChild(h('div', { class: 'kv' }, h('span', { text: (i + 1) + 'º  ' + Ranking.nameOf(e) + '  ·  ' + fmtDate(e.t) }), h('b', { text: sel === 5 ? fmtMsP(e.v) : fmtNum(e.v) }))));
+    list.forEach((e, i) => b.appendChild(h('div', { class: 'kv' }, h('span', { text: (i + 1) + 'º  ' + Ranking.label(e) + '  ·  ' + fmtDate(e.t) }), h('b', { text: sel === 5 ? fmtMsP(e.v) : fmtNum(e.v) }))));
     b.appendChild(btn(all ? 'Ver só o meu perfil' : 'Ver todos os perfis', () => { Sheet.back(); openRanking(sel, !all); }));
     if (!all && list.length) b.appendChild(btn('Limpar ranking', () => Confirm.ask('Apagar o ranking do perfil ' + me.name + '? (os outros perfis não são afetados)', () => { Ranking.clearProfile(me.id); Sheet.refresh(); }), 'danger'));
   });
