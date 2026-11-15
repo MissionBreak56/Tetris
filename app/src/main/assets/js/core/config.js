@@ -34,13 +34,20 @@ const SKILL_RGB={BLUR:'160,200,255',EROSION:'255,140,60',FISSION:'255,80,200',FU
 const POINTS={1:100,2:300,3:500,4:800};
 
 /* ================= PERSISTÊNCIA ================= */
+/* Vibração por tipo de ação: 0 desligada, 1 leve, 2 normal, 3 forte (vib() fica em core/audio.js). */
+const VIB_KINDS=[['hard','Queda rápida'],['clear','Linhas e T-Spin'],['skill','Habilidades'],['over','Fim de jogo'],['lock','Travar a peça'],['rotate','Girar'],['move','Mover']];
+const VIB_DEFAULT={hard:2,clear:2,skill:2,over:2,lock:0,rotate:0,move:0};
+const VIB_SCALE=[0,0.5,1,1.8], VIB_NAMES=['Desligada','Leve','Normal','Forte'];
+function vibMapParse(d){ const o=Object.assign({},VIB_DEFAULT); if(d&&typeof d==='object'&&!Array.isArray(d)) for(const [k] of VIB_KINDS){ const v=d[k]; if(Number.isInteger(v)&&v>=0&&v<=3) o[k]=v; } return o; }
+function vibScaled(ms,level){ const k=VIB_SCALE[level]||0; if(!k) return null; return Array.isArray(ms)?ms.map((v,i)=>i%2===0?Math.max(1,Math.round(v*k)):v):Math.max(1,Math.round(ms*k)); }
 const readVol=k=>{ const v=parseFloat(LS(k)); return isFinite(v)?Math.min(1,Math.max(0,v)):1; };
 function readSettings(){ return {
   sound: LS('isSound')!=='0', music: LS('isMusic')!=='0',
   ghost: LS('isShowGhost')!=='0', vib: LS('isVabiration')==='1',
   touch: LS('isTouchControl')!=='0', theme: Theme.parseId(LS('index_bg')), skin: Skins.valid(LS('skin'))?LS('skin'):'classic',
   musicVol: readVol('musicVol'), sfxVol: readVol('sfxVol'), fx: LS('isFx')!=='0', oppView: LS('oppView')!=='0',
-  startLevel: Math.min(30,Math.max(1,parseInt(LS('startLevel'),10)||1))
+  startLevel: Math.min(30,Math.max(1,parseInt(LS('startLevel'),10)||1)),
+  vibMap: vibMapParse(Store.getJSON('vibMap',null)), perf: ['0','1','2'].includes(LS('isPerf'))?parseInt(LS('isPerf'),10):2
 }; }
 const settings=readSettings();
 /** Recarrega tudo que depende do perfil ativo (chamado ao trocar/excluir perfil). */
@@ -54,4 +61,5 @@ function saveSettings(){
   SV('isShowGhost',settings.ghost?1:0); SV('isVabiration',settings.vib?1:0);
   SV('isTouchControl',settings.touch?1:0); SV('index_bg',settings.theme); SV('skin',settings.skin);
   SV('startLevel',settings.startLevel); SV('musicVol',settings.musicVol); SV('sfxVol',settings.sfxVol); SV('isFx',settings.fx?1:0); SV('oppView',settings.oppView?1:0);
+  Store.setJSON('vibMap',settings.vibMap); SV('isPerf',settings.perf);
 }

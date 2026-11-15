@@ -12,7 +12,8 @@ function idleSkip(){
 }
 function loop(t){
   requestAnimationFrame(loop);
-  if(idleSkip()) return;
+  Perf.check(t);
+  if(idleSkip()||Perf.skipFrame()) return;
   const dt=Math.min(0.1,(t-last)/1000||0); last=t;
   if(state==='REPLAY'){ Replay.frame(dt); updateFx(dt); render(); return; }
   if(Versus.active){ if(state==='VERSUS') Versus.frame(dt); updateFx(dt); render(); return; }

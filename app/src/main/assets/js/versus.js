@@ -1,7 +1,7 @@
 'use strict';
 /* Versus: dois tabuleiros na mesma tela (humano×IA ou humano×humano). Reaproveita o motor trocando o tabuleiro ativo (withBoard).
    Lixo/ataque: 2 linhas=1, 3=2, Tetris=4, T-Spin 1/2/3=2/4/6, +1 B2B, bônus de combo, Perfect Clear=10. Ataques cancelam lixo recebido.
-   ONLINE: a cada 2 linhas COLORIDAS que você limpa, uma linha cinza (lixo) do SEU tabuleiro é quebrada (a de baixo primeiro) — a partida dura mais.
+   TODOS OS MODOS (online, contra a IA e 2 jogadores): a cada 2 linhas COLORIDAS que você limpa, uma linha cinza (lixo) do SEU tabuleiro é quebrada (a de baixo primeiro) — a partida dura mais.
    Linhas de lixo que você limpa não contam; sobra 0 ou 1 linha para a conta seguinte. */
 const COMBO_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
 const GARBAGE_COLOR = '#707070';
@@ -89,7 +89,7 @@ const Versus = {
       const c = Math.min(atk, this.pend[i]); this.pend[i] -= c; atk -= c;
       if (atk > 0) { this.pend[1 - i] += atk; this.sent[i] += atk; }
     }
-    if (this.net && info.n > 0) {                                        // online: a cada 2 linhas coloridas limpas, folga uma linha cinza do PRÓPRIO tabuleiro
+    if (info.n > 0) {                                                    // a cada 2 linhas coloridas limpas, folga uma linha cinza do PRÓPRIO tabuleiro (online, IA e 2 jogadores)
       this.gl[i] += info.n - (info.gray || 0); const k = Math.floor(this.gl[i] / 2); this.gl[i] -= 2 * k;
       if (k > 0) this.breakGray(i, k);
     }
@@ -411,7 +411,7 @@ addEventListener('pointercancel', (e) => endVsTouch(e, true));
 
 function openVersus() {
   Sheet.push('Versus', (b) => {
-    b.appendChild(h('div', { class: 'hint', text: 'Dois tabuleiros. Limpar linhas envia lixo ao oponente (2 linhas=1, 3=2, Tetris=4, T-Spin=2/4/6, +1 B2B); online, a cada 2 linhas coloridas limpas folga uma linha cinza do seu tabuleiro. Perde quem topar primeiro. Contra a IA os gestos valem na tela toda; com dois jogadores, cada um usa a sua metade.' }));
+    b.appendChild(h('div', { class: 'hint', text: 'Dois tabuleiros. Limpar linhas envia lixo ao oponente (2 linhas=1, 3=2, Tetris=4, T-Spin=2/4/6, +1 B2B); a cada 2 linhas coloridas limpas folga uma linha cinza do seu tabuleiro. Perde quem topar primeiro. Contra a IA os gestos valem na tela toda; com dois jogadores, cada um usa a sua metade.' }));
     const me = () => Profile.cur().name;
     Object.keys(AI.levels).forEach((k) => b.appendChild(btn('Contra IA — ' + AI.levels[k].name, () => Versus.start({ players: [{ kind: 'human', name: me() }, { kind: 'ai', name: 'IA ' + AI.levels[k].name, level: k }] }))));
     b.appendChild(btn('Dois jogadores (mesma tela)', () => Versus.start({ players: [{ kind: 'human', name: 'Jogador 1' }, { kind: 'human', name: 'Jogador 2' }] })));

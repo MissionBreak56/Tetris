@@ -16,13 +16,28 @@ function slider(label, min, max, step, get, set, fmt) {
 function openSettingsSheet() {
   Sheet.push('Preferências', (b) => {
     b.appendChild(toggleBtn('Vibrar', () => settings.vib, (v) => { settings.vib = v; saveSettings(); refreshMenu(); }));
+    b.appendChild(btn('Vibração por ação…', openVibSheet));
     b.appendChild(toggleBtn('Efeitos visuais', () => settings.fx, (v) => { settings.fx = v; saveSettings(); }));
+    b.appendChild(btn('Desempenho: ' + Perf.label(settings.perf) + (Perf.save() ? ' (economia ligada)' : ''), () => { sfx.click(); settings.perf = (settings.perf + 1) % 3; Perf.lastCheck = -1e9; Perf.check(performance.now()); saveSettings(); Sheet.refresh(); }));
+    b.appendChild(h('div', { class: 'hint', text: 'Normal: tudo ligado · Economia: 30 quadros/s, sem partículas e brilhos · Automático: liga a economia sozinho com bateria ≤ 20% (sem carregar) ou economia de bateria do Android.' }));
     b.appendChild(toggleBtn('Miniatura do oponente (online)', () => settings.oppView, (v) => { settings.oppView = v; saveSettings(); }));
     b.appendChild(toggleBtn('Controle lateral no toque', () => settings.touch, (v) => { settings.touch = v; saveSettings(); }));
     b.appendChild(slider('Velocidade do modo Zen (nível)', 1, 30, 1, () => Prefs.zenLevel(), (v) => Prefs.setZenLevel(v), (v) => String(Math.round(v))));
     b.appendChild(btn('Áudio', openAudioSheet));
     b.appendChild(btn('Controles', openControlsSheet));
     b.appendChild(h('div', { class: 'hint' }, 'Gestos valem em qualquer lugar da tela:', h('br'), 'toque = gira (lado escolhe o sentido) · arrasta = move', h('br'), 'arrasta ↓ = queda suave · desliza ↓ = derruba · desliza ↑ = hold'));
+  });
+}
+function openVibSheet() {
+  Sheet.push('Vibração por ação', (b) => {
+    b.appendChild(toggleBtn('Vibrar (geral)', () => settings.vib, (v) => { settings.vib = v; saveSettings(); refreshMenu(); }));
+    b.appendChild(h('div', { class: 'hint', text: 'Escolha a intensidade de cada ação. Toque para alternar: Desligada → Leve → Normal → Forte (você sente uma amostra).' }));
+    VIB_KINDS.forEach(([k, name]) => {
+      const e = h('button', { class: 'btn small' }), upd = () => { e.textContent = name + ': ' + VIB_NAMES[settings.vibMap[k]]; };
+      e.onclick = () => { settings.vibMap[k] = (settings.vibMap[k] + 1) % 4; saveSettings(); upd(); const v = vibScaled(k === 'over' || k === 'skill' ? [40, 60, 40] : 40, settings.vibMap[k]); if (v !== null && settings.vib && navigator.vibrate) navigator.vibrate(v); };
+      upd(); b.appendChild(e);
+    });
+    b.appendChild(btn('Restaurar padrões', () => { settings.vibMap = vibMapParse(null); saveSettings(); Sheet.refresh(); }, 'danger'));
   });
 }
 function openAudioSheet() {

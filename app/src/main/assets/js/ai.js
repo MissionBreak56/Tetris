@@ -3,9 +3,12 @@
    Toda ação sai por act(código, true) — as mesmas regras e a mesma entrada de um humano. Determinística (RNG próprio com semente). */
 const AI = {
   levels: {
-    easy:   { name: 'Fácil',   delay: 14, noise: 5,   mistake: 0.20, look: 0, hold: false },
-    medium: { name: 'Médio',   delay: 6,  noise: 1.0, mistake: 0.04, look: 0, hold: true },
-    hard:   { name: 'Difícil', delay: 3,  noise: 0,   mistake: 0,    look: 1, hold: true },
+    beginner: { name: 'Iniciante',     delay: 22, noise: 9,   mistake: 0.35, look: 0, hold: false },
+    easy:     { name: 'Fácil',         delay: 14, noise: 5,   mistake: 0.20, look: 0, hold: false },
+    medium:   { name: 'Médio',         delay: 6,  noise: 1.0, mistake: 0.04, look: 0, hold: true },
+    hard:     { name: 'Difícil',       delay: 3,  noise: 0,   mistake: 0,    look: 1, hold: true },
+    expert:   { name: 'Especialista',  delay: 2,  noise: 0,   mistake: 0,    look: 2, hold: true },
+    master:   { name: 'Mestre',        delay: 1,  noise: 0,   mistake: 0,    look: 2, hold: true, deep: true },
   },
   VISIBLE_NEXT: 3,
   evaluate(grid) {                      // El-Tetris: alturas, buracos e irregularidade
@@ -39,9 +42,15 @@ const AI = {
       const moves = this.enumerate(g.grid, t); if (!moves.length) return null;
       moves.forEach((m) => { m.total = m.score + (r() - 0.5) * 2 * lv.noise; });
       let list = moves;
-      if (lv.look && nxt[0]) {                      // lookahead: só os 6 melhores são reavaliados e COMPARADOS ENTRE SI (mesma escala)
-        list = moves.sort((a, b) => b.score - a.score).slice(0, 6);
-        list.forEach((m) => { const b2 = this.best(m.grid, nxt[0]); m.total = m.score + (b2 ? b2.score * 0.8 : -50); });
+      if (lv.look && nxt[0]) {                      // lookahead: só os melhores são reavaliados e COMPARADOS ENTRE SI (mesma escala)
+        list = moves.sort((a, b) => b.score - a.score).slice(0, lv.deep ? 8 : 6);
+        list.forEach((m) => {
+          if (lv.look >= 2 && nxt[1]) {                // 2 peças à frente: melhores jogadas da 2ª peça reavaliadas com a 3ª
+            const b2s = this.enumerate(m.grid, nxt[0]).sort((a, b) => b.score - a.score).slice(0, lv.deep ? 6 : 4);
+            let bestTot = -Infinity; b2s.forEach((b2) => { const b3 = this.best(b2.grid, nxt[1]); const tot = b2.score + (b3 ? b3.score * 0.8 : -50); if (tot > bestTot) bestTot = tot; });
+            m.total = m.score + (b2s.length ? bestTot * 0.8 : -50);
+          } else { const b2 = this.best(m.grid, nxt[0]); m.total = m.score + (b2 ? b2.score * 0.8 : -50); }
+        });
       }
       list.sort((a, b) => b.total - a.total);
       let pick = list[0];
