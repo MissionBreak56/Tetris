@@ -159,7 +159,7 @@ function drawMenuHud(){
   ctx.save(); ctx.shadowColor='rgb('+T[3]+')'; ctx.shadowBlur=CELL*0.4;
   txt('SCORE',W/2,y,CELL*1.15,Theme.ui().ink,'center','500'); ctx.restore();
   txt('BEST '+(+(LS('bestScore')||0)),W/2,y+CELL*0.95,CELL*0.5,T[2],'center','600');
-  txt(Profile.cur().name,W/2,y+CELL*1.55,CELL*0.4,'rgba(255,255,255,.55)','center','500');
+  txt(Profile.avatar()+' '+Profile.cur().name,W/2,y+CELL*1.55,CELL*0.4,'rgba(255,255,255,.55)','center','500');
 }
 function drawHUD(){
   const sz=CELL*0.62, y=L.hudY;

@@ -106,9 +106,11 @@ function openSkins() {
       const cv = h('canvas', { width: '196', height: '28' });
       const c = cv.getContext('2d');
       'IJLOSTZ'.split('').forEach((t, i) => Skins.draw(c, 4 + i * 27, 2, 24, COLORS[t], 1, id));
-      const row = h('div', { class: 'skinrow' + (settings.skin === id ? ' sel' : ''), onclick: () => { sfx.click(); if (locked) { msg.textContent = 'Desbloqueie esta skin com ' + cost + ' ⭐'; return; } settings.skin = id; saveSettings(); Sheet.refresh(); } },
-        h('div', { class: 'kv' }, h('span', { text: name + (settings.skin === id ? ' ●' : '') + (locked ? ' 🔒 ' + cost + ' ⭐' : '') })), cv);
-      if (locked) row.appendChild(btn('Desbloquear (' + cost + ' ⭐)', (ev) => { if (ev && ev.stopPropagation) ev.stopPropagation(); const r = Rewards.unlock('skin:' + id); if (r.ok) { settings.skin = id; saveSettings(); Sheet.refresh(); } else msg.textContent = r.error; }));
+      const pick = () => { sfx.click(); if (locked) { msg.textContent = 'Desbloqueie esta skin com ' + cost + ' ⭐'; return; } settings.skin = id; saveSettings(); Sheet.refresh(); };
+      cv.onclick = pick;
+      const row = h('div', { class: 'skinrow' + (settings.skin === id ? ' sel' : '') },
+        h('div', { class: 'kv', onclick: pick }, h('span', { text: name + (settings.skin === id ? ' ●' : '') + (locked ? ' 🔒 ' + cost + ' ⭐' : '') })), cv);
+      if (locked) row.appendChild(btn('Desbloquear (' + cost + ' ⭐)', () => { const r = Rewards.unlock('skin:' + id); if (r.ok) { settings.skin = id; saveSettings(); Sheet.refresh(); } else msg.textContent = r.error; }));
       b.appendChild(row);
     });
     b.appendChild(msg);

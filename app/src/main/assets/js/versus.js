@@ -50,7 +50,7 @@ const Versus = {
     this.create(cfg); this.active = true;
     $('pauseBtn').style.display = 'flex';
     let n = 3; state = 'COUNT'; const cd = $('count'); cd.style.display = 'flex';
-    const step = () => { if (n > 0) { cd.textContent = n; restartAnim(cd, 'cpop'); sfx.tick(); n--; setTimeout(step, 650); } else { cd.style.display = 'none'; state = 'VERSUS'; startMusic(true); } };
+    const step = () => { if (n > 0) { cd.textContent = n; restartAnim(cd, 'cpop'); sfx.tick(); n--; setTimeout(step, 650); } else { cd.style.display = 'none'; state = 'VERSUS'; startMusic(true); Social.syncUi(); } };
     step();
   },
   stop() { this.active = false; this.touch = [null, null]; if (this.net) { this.net = null; Net.disconnect(); } },
@@ -145,7 +145,7 @@ const Versus = {
     this.result = { winner: d.winner, tie: d.tie, ticks: this.ticks, sent: this.sent.slice(), score: B.map((g) => Math.round(g.score)), lines: B.map((g) => g.lines), names: this.cfg.players.map((p) => p.name), kinds: this.cfg.players.map((p) => p.kind), level: this.cfg.players.map((p) => p.level || null) };
     if (this.cfg.headless) return;
     if (this.net) { Net.pump(true); Net.matchEnded(); }      // última confirmação: o oponente precisa do nosso "u" para também encerrar
-    state = 'VSOVER'; stopMusic(); sfx.gameover(); $('pauseBtn').style.display = 'none';
+    state = 'VSOVER'; stopMusic(); sfx.gameover(); $('pauseBtn').style.display = 'none'; Social.syncUi();
     const finishUi = () => { if (state !== 'VSOVER') return; if (this.cfg.onEnd) this.cfg.onEnd(this.result); else this.showEnd(); };
     setTimeout(finishUi, 1200);
   },
@@ -161,10 +161,15 @@ const Versus = {
     box.appendChild(kv('Placar', fmtNum(r.score[0]) + ' × ' + fmtNum(r.score[1])));
     box.appendChild(kv('Linhas', r.lines[0] + ' × ' + r.lines[1])); box.appendChild(kv('Lixo enviado', r.sent[0] + ' × ' + r.sent[1]));
     box.appendChild(kv('Duração', fmtMsP(r.ticks * 1000 / 60)));
+    if (net && !r.aborted) {                                            // placar de vitórias contra este oponente (por perfil)
+      const on = r.names[1 - me], tot = H2H.record(on, win ? 'w' : 'l', Net.sid), rr = tot;
+      box.appendChild(kv('Placar contra ' + on, rr.w + ' × ' + rr.l));
+    }
+    if (net) Social.setupEnd(box);
     if (r.tie && !r.reason) box.appendChild(h('div', { class: 'hint', text: 'Desempate por lixo enviado/pontuação.' }));
     if (r.reason) box.appendChild(h('div', { class: 'errs', text: r.reason }));
     (res.unlocked || []).forEach((a) => box.appendChild(h('div', { class: 'newrec', text: '🏆 Conquista: ' + a.name })));
-    show('endPanel'); void rec;
+    show('endPanel'); Social.syncUi(); void rec;
   },
   /** Simulação sem tela (IA × IA) para torneios. Não toca no estado do app. */
   simulate(cfg) {
@@ -321,7 +326,7 @@ Versus.netAbort = function (why) {
   if (this.over) return; this.over = true; const B = this.B;
   this.result = { winner: -1, tie: false, aborted: true, reason: why, ticks: this.ticks, sent: this.sent.slice(), score: B.map((g) => Math.round(g.score)), lines: B.map((g) => g.lines), names: this.cfg.players.map((p) => p.name), kinds: ['human', 'human'] };
   Net.send({ k: 'bye' }); try { Net.tr().close(); } catch (e) {}
-  state = 'VSOVER'; stopMusic(); $('pauseBtn').style.display = 'none'; Net.st = 'ended'; Net.peer = null; Net.stopTimer();
+  state = 'VSOVER'; stopMusic(); $('pauseBtn').style.display = 'none'; Net.st = 'ended'; Net.peer = null; Net.stopTimer(); Social.syncUi();
   setTimeout(() => { if (state === 'VSOVER') this.showEnd(); }, 600);
 };
 /** Um dos lados saiu/caiu: o outro vence. */
@@ -340,14 +345,14 @@ Versus.renderNet = function () {
 };
 Versus.netHud = function (g, op, me) {
   const C = CELL, T = TH();
-  const p = Net.ping(), nm = (this.cfg.players[1 - me].name || 'Oponente').slice(0, 14);
+  const p = Net.ping(), opp = this.cfg.players[1 - me], nm = ((opp.av != null ? AVATARS[opp.av] + ' ' : '') + (opp.name || 'Oponente')).slice(0, 16);
   txt('vs ' + nm + (p != null ? '  ·  ' + Math.round(p) + ' ms' : ''), W / 2, L.hudY + C * 0.95, C * 0.5, 'rgba(255,255,255,.7)', 'center', '600');
   const pe = this.pend[me];                                           // lixo a caminho: barra vermelha na margem esquerda da moldura
   if (pe > 0) { const hh = Math.min(pe, ROWS) * C; ctx.fillStyle = '#ff4d4d'; ctx.fillRect(L.bx - L.pad * 0.42, L.by + L.bh - hh, L.pad * 0.3, hh); }
   this.netBanner(C);
   if (settings.oppView) {                                             // miniatura do oponente (coluna esquerda, abaixo do Hold)
     const w = L.hold.w, cs = w / COLS, x0 = L.hold.x, y0 = L.hold.y + L.hold.h + C * 1.3, hh = ROWS * cs;
-    txt(nm.slice(0, 8), x0 + w / 2, y0 - C * 0.45, C * 0.4, Theme.ui().dim, 'center', '600');
+    txt((opp.name || 'Oponente').slice(0, 8), x0 + w / 2, y0 - C * 0.45, C * 0.4, Theme.ui().dim, 'center', '600');
     ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(x0, y0, w, hh);
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { const col = op.grid[r][c]; if (col) { ctx.fillStyle = col; ctx.fillRect(x0 + c * cs, y0 + r * cs, Math.max(1, cs - 0.6), Math.max(1, cs - 0.6)); } }
     if (op.active && !op.overDone) { ctx.globalAlpha = 0.85; ctx.fillStyle = COLORS[op.active.t]; cells(op.active).forEach(([cx, cy]) => { if (cy >= 0) ctx.fillRect(x0 + cx * cs, y0 + cy * cs, Math.max(1, cs - 0.6), Math.max(1, cs - 0.6)); }); ctx.globalAlpha = 1; }

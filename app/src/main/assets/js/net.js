@@ -23,7 +23,7 @@ const PRIVATE_NET = /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|
 const Net = {
   PROTO: 6, PORT: 47600, MAX_LINE: 16384, HS_MS: 5000, DEAD_MS: 7000, DEAD_PLAY_MS: 5000, GRACE_MS: 20000, RC_RETRY_MS: 1000, MAX_LOG: 3000, HASH_EVERY: 120,
   T: null, role: null, sentU: -1, st: 'idle', peer: null, hosts: [], ip: '', ips: [], rtts: [], hbN: 0, err: '', lastRx: 0, hsAt: 0, lastSend: 0, lastSentTick: -9, timer: null, onChange: null, name: '', info: '',
-  sid: '', txSeq: 0, rxSeq: -1, peerAck: -1, msgLog: [], joinIp: '', joinPort: 0, beatAt: 0, rcAt: 0, rcNext: 0, rcBusy: false, rcTries: 0, rcWhy: '', resumes: 0,
+  ready: false, peerReady: false, sid: '', txSeq: 0, rxSeq: -1, peerAck: -1, msgLog: [], joinIp: '', joinPort: 0, beatAt: 0, rcAt: 0, rcNext: 0, rcBusy: false, rcTries: 0, rcWhy: '', resumes: 0,
   now() { return Date.now(); },
   tr() { return this.T || Lan; },
   available() { return this.tr().available(); },
@@ -31,7 +31,7 @@ const Net = {
   connected() { return ['handshake', 'lobby', 'playing', 'reconnecting', 'ended'].includes(this.st); },
   validIp(ip) { const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(ip).trim()); return !!m && m.slice(1).every((x) => +x <= 255) && PRIVATE_NET.test(String(ip).trim()); },
   stopTimer() { if (this.timer) { clearInterval(this.timer); this.timer = null; } },
-  reset() { this.stopTimer(); this.sid = ''; this.txSeq = 0; this.rxSeq = -1; this.peerAck = -1; this.msgLog = []; this.rcBusy = false; this.beatAt = 0; this.role = null; this.peer = null; this.hosts = []; this.ip = ''; this.ips = []; this.rtts = []; this.err = ''; this.st = 'idle'; },
+  reset() { this.stopTimer(); this.ready = false; this.peerReady = false; this.sid = ''; this.txSeq = 0; this.rxSeq = -1; this.peerAck = -1; this.msgLog = []; this.rcBusy = false; this.beatAt = 0; this.role = null; this.peer = null; this.hosts = []; this.ip = ''; this.ips = []; this.rtts = []; this.err = ''; this.st = 'idle'; },
   /** Encerra tudo: avisa o outro lado (se conectado) e fecha o socket. */
   disconnect() {
     if (this.connected()) this.send({ k: 'bye' });
@@ -70,7 +70,7 @@ const Net = {
           this.rcLink = true; this.lastRx = this.now(); this.send({ k: 'resume', p: this.PROTO, eng: ENGINE_VERSION, sid: this.sid, a: this.rxSeq }); break;
         }
         this.hsAt = this.now(); this.lastRx = this.now(); this.peer = null; this.rtts = []; this.hbN = 0; this.setSt('handshake', '');
-        this.send({ k: 'hello', p: this.PROTO, eng: ENGINE_VERSION, name: this.name || Profile.cur().name });
+        this.send({ k: 'hello', p: this.PROTO, eng: ENGINE_VERSION, name: this.name || Profile.cur().name, av: Profile.avatarIdx(Profile.cur()) });
         this.stopTimer(); this.timer = setInterval(() => this.heartbeat(), 500); break;
       case 'closed': this.onClosed(String(e.why || 'Conexão encerrada')); break;
       case 'error':
@@ -94,7 +94,8 @@ const Net = {
       if (this.role !== 'client' || !['lobby', 'ended'].includes(this.st)) return;
       if (!Number.isInteger(m.seed) || m.seed < 0 || m.seed > 4294967295 || typeof m.sid !== 'string' || !/^[0-9a-f]{8,32}$/.test(m.sid)) return;
       this.beginMatch(m.seed, m.sid);
-    } else if (m.k === 'again') { if (this.role === 'host' && this.st === 'ended') this.startMatch(); }
+    } else if (m.k === 'again') { if (['playing', 'ended'].includes(this.st)) { this.peerReady = true; this.checkRematch(); Social.refreshEnd(); } }       // revanche: os DOIS precisam querer
+    else if (m.k === 'emote') Social.onEmote(m);
     else if (m.k === 'in') { if (this.st === 'playing' && Versus.net) this.onIn(m); }
     else if (m.k === 'rs') { if (this.st === 'playing' && Versus.net && Number.isInteger(m.a)) this.resendFrom(m.a); }
     else if (m.k === 'h') { if (this.st === 'playing' && Versus.net) Versus.netRecvHash(m); }
@@ -104,7 +105,8 @@ const Net = {
     if (m.p !== this.PROTO) { this.send({ k: 'nack', why: 'Versão de protocolo diferente' }); this.disconnectKeep('O oponente usa outra versão do jogo'); return; }
     if (m.eng !== ENGINE_VERSION) { this.send({ k: 'nack', why: 'Versão do motor diferente (' + ENGINE_VERSION + ')' }); this.disconnectKeep('O oponente usa outra versão do jogo (motor ' + String(m.eng).slice(0, 8) + ')'); return; }
     let n = Tourney.clean(m.name) || 'Oponente'; if (n.toLowerCase() === String(this.name).toLowerCase()) n = (n + ' (2)').slice(0, 16);
-    this.peer = { name: n }; this.setSt('lobby', '');
+    const av = Number.isInteger(m.av) && m.av >= 0 && m.av < AVATARS.length ? m.av : null;
+    this.peer = { name: n, av }; this.setSt('lobby', '');
   },
   disconnectKeep(msg) { try { this.tr().close(); } catch (e) {} this.stopTimer(); const r = this.role; this.reset(); this.role = r; this.setSt('error', msg); },
   heartbeat() {
@@ -144,15 +146,18 @@ const Net = {
   newSid() { let x = ''; for (let i = 0; i < 4; i++) x += ((Math.random() * 4294967296) >>> 0).toString(16).padStart(8, '0'); return x; },
   beginMatch(seed, sid) {
     this.sid = sid || this.newSid(); this.txSeq = 0; this.rxSeq = -1; this.peerAck = -1; this.msgLog = []; this.rcBusy = false; this.resumes = 0;
-    const host = this.role === 'host', me = { kind: 'human', name: this.name || Profile.cur().name }, op = { kind: 'human', name: this.peer.name };
+    this.ready = false; this.peerReady = false;
+    const host = this.role === 'host', me = { kind: 'human', name: this.name || Profile.cur().name, av: Profile.avatarIdx(Profile.cur()) }, op = { kind: 'human', name: this.peer.name, av: this.peer.av };
     this.st = 'playing'; this.lastSentTick = -9; this.sentU = -1; Sheet.stack = [];
     Versus.start({ seed, players: host ? [me, op] : [op, me], net: { local: host ? 0 : 1 } });
   },
+  /** Revanche: cada lado toca em "Revanche"; a partida só começa quando os DOIS estão prontos (o anfitrião inicia). */
   rematch() {
-    if (!this.connected()) { goMenu(); return; }
-    if (this.role === 'host') this.startMatch(); else { this.send({ k: 'again' }); }
+    if (!this.connected() || !this.peer) { goMenu(); return; }
+    if (this.ready) return; this.ready = true; this.send({ k: 'again' }); this.checkRematch(); Social.refreshEnd();
   },
-  matchEnded() { if (this.st === 'playing') this.st = 'ended'; },
+  checkRematch() { if (this.ready && this.peerReady && this.role === 'host' && this.st === 'ended') this.startMatch(); },
+  matchEnded() { if (this.st === 'playing') this.st = 'ended'; this.checkRematch(); },
   /** Enviado a cada quadro durante a partida: ações novas + promessa "não haverá ação minha antes do tick u". */
   pump(force) {
     const v = Versus.net; if (!v || this.st !== 'playing') return;
@@ -245,7 +250,8 @@ function openOnline() {
     } else if (st === 'connecting' || st === 'handshake') {
       b.appendChild(h('div', { class: 'stat', text: 'Conectando…' })); b.appendChild(btn('Cancelar', () => Net.disconnect()));
     } else if (st === 'lobby') {
-      b.appendChild(h('div', { class: 'newrec', text: '✔ Conectado com ' + Net.peer.name }));
+      b.appendChild(h('div', { class: 'newrec', text: '✔ Conectado com ' + (Net.peer.av != null ? AVATARS[Net.peer.av] + ' ' : '') + Net.peer.name }));
+      { const r = H2H.get(Net.peer.name); if (r.w + r.l + r.t > 0) b.appendChild(kv('Placar contra ' + Net.peer.name, r.w + ' × ' + r.l)); }
       { const p = Net.ping(); b.appendChild(kv('Ping', p == null ? 'medindo…' : Math.round(p) + ' ms')); b.appendChild(kv('Atraso dos seus comandos', '≈ 0 ms (previsão com correção)')); }
       if (Net.role === 'host') b.appendChild(btn('▶ Iniciar partida', () => Net.startMatch())); else b.appendChild(h('div', { class: 'stat', text: 'Aguardando o anfitrião iniciar…' }));
       b.appendChild(btn('Desconectar', () => Net.disconnect()));
