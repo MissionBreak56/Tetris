@@ -1,6 +1,6 @@
 # Tetris — código próprio
 
-Tetris para Android feito do zero, sem anúncios e sem rede, inspirado nas regras observadas na análise do APK Tetris 1.0.16.
+Tetris para Android feito do zero, sem anúncios e sem rede.
 
 - Grade 10×20, sorteio 7-bag, hold, peça-fantasma, T-Spin e Back-to-Back
 - Gravidade pela tabela de quadros (níveis 1–30)
