@@ -18,7 +18,7 @@ function loop(t){
   if(state==='REPLAY'){ Replay.frame(dt); updateFx(dt); render(); return; }
   if(Versus.active){ if(state==='VERSUS') Versus.frame(dt); updateFx(dt); render(); return; }
   acc+=dt; let n=0;
-  while(acc>=STEP&&n<6){ update(STEP); acc-=STEP; n++; }   // passo fixo => simulação determinística (replays)
+  while(acc>=STEP&&n<6){ update(STEP); Ghost.sync(); acc-=STEP; n++; }   // passo fixo => simulação determinística (replays)
   if(n===6) acc=0;
   updateFx(dt); render();
 }

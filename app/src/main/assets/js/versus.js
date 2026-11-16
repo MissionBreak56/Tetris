@@ -6,7 +6,7 @@
 const COMBO_BONUS = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5];
 const GARBAGE_COLOR = '#707070';
 const Versus = {
-  PRED_MAX: 45, SNAP_WIN: 70, PACE_MAX: 0.2, PACE_GAIN: 0.02, LEAD_MARGIN: 6, STALL_SHOW_S: 0.35,
+  PRED_MAX: 45, SNAP_WIN: 70, PACE_MAX: 0.2, PACE_GAIN: 0.02, LEAD_MARGIN: 6, STALL_SHOW_S: 0.35, MAX_RESYNC: 3, RESYNC_WAIT_MS: 5000, END_WAIT_MS: 4000,
   active: false, net: null, cfg: null, B: [], pend: [0, 0], sent: [0, 0], gl: [0, 0], rng: null, lay: [], cellV: 14, ticks: 0, acc: 0, over: false, result: null, touch: [null, null], MAX_TICKS: 18000,
   layouts() {
     if (this.net) { this.cellV = CELL; this.lay = [L, L]; return; }          // online: cada um vê SÓ a sua tela (layout solo); gestos usam o tamanho de célula solo
@@ -31,7 +31,7 @@ const Versus = {
     const seed = cfg.seed != null ? cfg.seed >>> 0 : (Math.random() * 4294967296) >>> 0;
     this.cfg = cfg; this.pend = [0, 0]; this.sent = [0, 0]; this.gl = [0, 0]; this.ticks = 0; this.acc = 0; this.over = false; this.result = null; this.touch = [null, null];
     this.rng = mkRng(seed ^ 0x9e3779b9); this.B = [];
-    this.net = cfg.net ? { local: cfg.net.local, link: true, soft: [false, false], q: [{}, {}], remoteUpto: -1, out: [], snaps: {}, rb: null, endTick: null, nextH: Net.HASH_EVERY, hashes: {}, remoteHashes: {} } : null;
+    this.net = cfg.net ? { local: cfg.net.local, link: true, desyncs: 0, resyncT: null, resync: null, soft: [false, false], q: [{}, {}], remoteUpto: -1, out: [], snaps: {}, rb: null, endTick: null, nextH: Net.HASH_EVERY, hashes: {}, remoteHashes: {} } : null;
     this.layouts();
     const keep = G;
     for (let i = 0; i < 2; i++) {
@@ -251,7 +251,7 @@ Versus.unsnap = function (s, tick) {
   s.B.forEach((b, i) => restoreBoard(this.B[i], b)); this.pend = s.pend.slice(); this.sent = s.sent.slice(); this.gl = s.gl.slice(); this.rng.set(s.vr); this.ticks = tick;
 };
 /** Conexão caiu (false) ou voltou (true): com a conexão caída o jogo para dos dois lados (o oponente para sozinho ao esgotar a previsão). */
-Versus.netLink = function (ok) { if (!this.net) return; this.net.link = !!ok; this.net.stall = 0; if (!ok) this.acc = 0; };
+Versus.netLink = function (ok) { if (!this.net) return; this.net.link = !!ok; this.net.stall = 0; if (!ok) this.acc = 0; else this.net.endSent = null; };
 Versus.netApply = function (t) {
   for (let i = 0; i < 2; i++) {
     const ev = this.net.q[i][t]; if (!ev) continue;
@@ -289,8 +289,21 @@ Versus.netCheck = function () {
     if (n.remoteHashes[t] !== undefined) this.netCompare(t);
     n.nextH += Net.HASH_EVERY; if (this.over) return;
   }
+  if (n.resync && Net.now() - n.resync.at > this.RESYNC_WAIT_MS) return this.netAbort('Os jogos dessincronizaram (tick ' + n.resync.t + ')');
   if (n.endTick != null && n.remoteUpto >= n.endTick - 1) {
-    if (this.ticks !== n.endTick) { const s = n.snaps[n.endTick]; if (!s) return this.netAbort('Fora de sincronia'); this.unsnap(s, n.endTick); }
+    // fim de partida: antes de encerrar, os dois lados conferem o hash do estado FINAL (uma divergência perto do fim não pode dar resultados diferentes)
+    const t = n.endTick, st = this.ticks === t ? this.snap() : n.snaps[t]; if (!st) return this.netAbort('Fora de sincronia');
+    if (n.endSent !== t) { n.endSent = t; n.endAt = Net.now(); n.endH = this.snapHash(st); Net.send({ k: 'h', t, h: n.endH }); }
+    const theirs = n.remoteHashes[t];
+    if (theirs === undefined) {
+      if (!n.link) { n.endAt = Net.now(); return; }
+      const now = Net.now(); if (now - (n.endRe || n.endAt) >= 1000) { n.endRe = now; Net.send({ k: 'h', t, h: n.endH }); }       // reenvia enquanto espera (a mensagem pode ter se perdido numa queda)
+      if (now - n.endAt > this.END_WAIT_MS) { /* o oponente não respondeu: encerra com o que temos (sem a conferência), como antes */ if (this.ticks !== t) this.unsnap(st, t); this.finish(); }
+      return;
+    }
+    delete n.remoteHashes[t];
+    if (theirs !== n.endH) { n.endSent = null; return this.netDesync(t, st); }
+    if (this.ticks !== t) this.unsnap(st, t);
     this.finish();
   }
 };
@@ -314,12 +327,64 @@ Versus.snapHash = function (s) {
   return fnv(JSON.stringify([s.B.map((b) => [this.gridKey(b.grid), Math.round(b.score), b.lines, b.level, b.tick, b.active && b.active.t, b.active && b.active.x, b.active && b.active.y, b.held, b.queue.slice(0, 3)]), s.pend, s.sent, s.gl]));
 };
 Versus.netRecvHash = function (m) {
-  const n = this.net; if (!Number.isInteger(m.t) || typeof m.h !== 'string' || m.h.length > 16) return;
+  const n = this.net; if (!n || !Number.isInteger(m.t) || typeof m.h !== 'string' || m.h.length > 16) return;
+  if (this.over && n.endSent === m.t && n.endH) { Net.send({ k: 'h', t: m.t, h: n.endH }); return; }          // já terminei: devolvo o meu hash final a quem ainda espera
   n.remoteHashes[m.t] = m.h; if (n.hashes[m.t] !== undefined) this.netCompare(m.t);
 };
 Versus.netCompare = function (t) {
   const n = this.net, a = n.hashes[t], b = n.remoteHashes[t]; delete n.hashes[t]; delete n.remoteHashes[t];
-  if (a !== b) this.netAbort('Os jogos dessincronizaram (tick ' + t + ')');
+  if (a === b) return;
+  if (n.resyncT != null && t <= n.resyncT) return;                 // esse trecho já foi corrigido pelo estado do anfitrião
+  this.netDesync(t);
+};
+/* ---- recuperação de dessincronia: em vez de encerrar, o ANFITRIÃO é a referência: envia o estado confirmado do tick t e o cliente volta a ele e re-simula ---- */
+/** Estado (snapshot) em formato de rede: células do grid viram letras (independente do tema de cada aparelho). */
+Versus.encodeSnap = function (s) {
+  const rev = {}; for (const k of Object.keys(COLORS)) if (!(COLORS[k] in rev)) rev[COLORS[k]] = k;
+  const encB = (b) => { const o = {}; for (const k in b) o[k] = k === 'grid' ? b.grid.map((r) => r.map((c) => (c ? (c === GARBAGE_COLOR ? 'G' : (rev[c] || 'X')) : '.')).join('')) : b[k]; return o; };
+  return { B: s.B.map(encB), pend: s.pend, sent: s.sent, gl: s.gl, vr: s.vr };
+};
+/** Inverso de encodeSnap, validando o formato (lança erro se estiver malformado). */
+Versus.decodeSnap = function (j) {
+  const bad = (w) => { throw new Error('estado inválido' + (w ? ': ' + w : '')); };
+  if (!j || typeof j !== 'object' || !Array.isArray(j.B) || j.B.length !== 2 || !Array.isArray(j.pend) || !Array.isArray(j.sent) || !Array.isArray(j.gl) || j.pend.length !== 2 || j.sent.length !== 2 || j.gl.length !== 2) bad('forma');
+  [j.pend, j.sent, j.gl].forEach((a) => a.forEach((v) => { if (!Number.isFinite(v)) bad('número'); })); if (!Number.isFinite(j.vr) && !Array.isArray(j.vr)) bad('rng');
+  const dec = (b) => {
+    if (!b || typeof b !== 'object' || !Array.isArray(b.grid) || b.grid.length !== ROWS) bad('grid ' + (b && b.grid && b.grid.length));
+    const o = {}; for (const k in b) o[k] = b[k];
+    o.grid = b.grid.map((r) => { if (typeof r !== 'string' || r.length !== COLS) bad('linha'); return Array.from(r).map((ch) => { if (ch === '.') return null; if (ch === 'G' || ch === 'X') return GARBAGE_COLOR; if (COLORS[ch] === undefined) bad('cor ' + ch); return COLORS[ch]; }); });
+    if (!Array.isArray(o.queue) || !o.queue.every((t) => typeof t === 'string' && COLORS[t] !== undefined) || !Number.isFinite(o.score) || !Number.isFinite(o.lines) || !Number.isFinite(o.level)) bad('campos ' + JSON.stringify([o.queue, o.score, o.lines, o.level]));
+    if (o.active != null && (typeof o.active !== 'object' || COLORS[o.active.t] === undefined)) bad('peça');
+    return o;
+  };
+  return { B: j.B.map(dec), pend: j.pend.slice(), sent: j.sent.slice(), gl: j.gl.slice(), vr: j.vr };
+};
+/** Primeiro tick de hash que ainda tem snapshot guardado (depois de uma correção). */
+Versus.nextHashAfter = function (t) { let k = t + Net.HASH_EVERY; while (k < this.ticks - this.SNAP_WIN + 10) k += Net.HASH_EVERY; return k; };
+Versus.netDesync = function (t, snapNow) {
+  const n = this.net, snap = snapNow || n.snaps[t], why = 'Os jogos dessincronizaram (tick ' + t + ')';
+  if (++n.desyncs > this.MAX_RESYNC || !snap) return this.netAbort(why);
+  this.netResyncReset(t);
+  if (n.local === 0) Net.send({ k: 'sync', t, st: this.encodeSnap(snap) });          // anfitrião = referência
+  else n.resync = { t, at: Net.now() };                                                // cliente espera o estado do anfitrião
+};
+Versus.netResyncReset = function (t) {
+  const n = this.net; n.resyncT = t;
+  for (const k of Object.keys(n.hashes)) if (+k > t) delete n.hashes[k]; for (const k of Object.keys(n.remoteHashes)) if (+k > t) delete n.remoteHashes[k];
+  n.nextH = this.nextHashAfter(t);
+};
+Versus.netRecvSync = function (m) {
+  const n = this.net; if (!n || n.local !== 1 || this.over) return;
+  if (!Number.isInteger(m.t) || m.t < 0 || m.t > this.ticks + 600 || !m.st) return this.netAbort('Estado inválido do oponente');
+  const known = n.resync && n.resync.t === m.t;
+  if (!known) { if (n.resyncT != null && m.t <= n.resyncT) return; if (++n.desyncs > this.MAX_RESYNC) return this.netAbort('Os jogos dessincronizaram (tick ' + m.t + ')'); }
+  let snap; try { snap = this.decodeSnap(m.st); } catch (e) { return this.netAbort('Estado inválido do oponente' + (typeof DEBUG_SYNC !== 'undefined' ? ' [' + e.message + ']' : '')); }
+  const live = this.ticks <= m.t;                                      // ainda não passei desse tick (típico do fim de partida): troco o estado na hora
+  if (!live && !n.snaps[m.t]) return this.netAbort('Fora de sincronia (o estado do anfitrião chegou tarde)');
+  n.snaps[m.t] = snap; n.resync = null;
+  if (live) { this.unsnap(snap, m.t); n.endTick = null; n.endSent = null; if (this.B[0].overDone || this.B[1].overDone || this.ticks >= this.MAX_TICKS) n.endTick = this.ticks; }
+  else { n.rb = n.rb == null ? m.t : Math.min(n.rb, m.t); n.endSent = null; }
+  this.netResyncReset(m.t);
 };
 /** Encerra sem vencedor (dessincronia, mensagem inválida). */
 Versus.netAbort = function (why) {
@@ -370,6 +435,7 @@ Versus.netHud = function (g, op, me) {
 Versus.netBanner = function (C) {
   const n = this.net; let msg = '', sub = '';
   if (Net.st === 'reconnecting') { msg = 'Reconectando…'; sub = 'Partida parada · ' + Math.max(0, Math.ceil((Net.GRACE_MS - (Net.now() - Net.rcAt)) / 1000)) + ' s'; }
+  else if (!this.over && n.resync) { msg = 'Sincronizando…'; }
   else if (!this.over && (n.stall || 0) > this.STALL_SHOW_S) { msg = 'Aguardando o oponente…'; }
   if (!msg) return;
   const y = L.by + L.bh * 0.42, w = Math.min(L.bw, C * 9);

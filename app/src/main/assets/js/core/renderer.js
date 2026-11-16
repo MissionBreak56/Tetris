@@ -224,7 +224,7 @@ function render(){
   ctx.save();
   if(FX.shake>0) ctx.translate((Math.random()-.5)*FX.shake*2,(Math.random()-.5)*FX.shake*2);
   if(Versus.active&&state!=='MENU'){ Versus.render(); }
-  else if(G&&state!=='MENU'){ drawFrame(); drawBoard(); drawHUD(); if(state==='REPLAY') drawReplayHud(); }
+  else if(G&&state!=='MENU'){ drawFrame(); drawBoard(); drawHUD(); if(state==='REPLAY') drawReplayHud(); else Ghost.draw(); }
   else if(state==='MENU'){ drawFrame(); drawLogo(); drawMenuHud(); }
   FX.parts.forEach(q=>{ ctx.globalAlpha=Math.max(0,q.life/q.max); ctx.fillStyle=q.color; ctx.fillRect(q.x-q.size/2,q.y-q.size/2,q.size,q.size); });
   ctx.globalAlpha=1;

@@ -16,6 +16,7 @@ function slider(label, min, max, step, get, set, fmt) {
 function openSettingsSheet() {
   Sheet.push('Preferências', (b) => {
     b.appendChild(toggleBtn('Vibrar', () => settings.vib, (v) => { settings.vib = v; saveSettings(); refreshMenu(); }));
+    b.appendChild(toggleBtn('Fantasma do seu recorde (corrida)', () => settings.ghostRace, (v) => { settings.ghostRace = v; saveSettings(); }));
     b.appendChild(btn('Vibração por ação…', openVibSheet));
     b.appendChild(toggleBtn('Efeitos visuais', () => settings.fx, (v) => { settings.fx = v; saveSettings(); }));
     b.appendChild(btn('Desempenho: ' + Perf.label(settings.perf) + (Perf.save() ? ' (economia ligada)' : ''), () => { sfx.click(); settings.perf = (settings.perf + 1) % 3; Perf.lastCheck = -1e9; Perf.check(performance.now()); saveSettings(); Sheet.refresh(); }));

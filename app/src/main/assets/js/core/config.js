@@ -53,7 +53,7 @@ const readVol=k=>{ const v=parseFloat(LS(k)); return isFinite(v)?Math.min(1,Math
 function readSettings(){ return {
   sound: LS('isSound')!=='0', music: LS('isMusic')!=='0',
   ghost: LS('isShowGhost')!=='0', vib: LS('isVabiration')==='1',
-  touch: LS('isTouchControl')!=='0', theme: Theme.usable(Theme.parseId(LS('index_bg'))), skin: Skins.valid(LS('skin'))&&Skins.usable(LS('skin'))?LS('skin'):'classic', dyn: LS('dynTheme')==='1',
+  touch: LS('isTouchControl')!=='0', theme: Theme.usable(Theme.parseId(LS('index_bg'))), skin: Skins.valid(LS('skin'))&&Skins.usable(LS('skin'))?LS('skin'):'classic', dyn: LS('dynTheme')==='1', ghostRace: LS('ghostRace')!=='0',
   musicVol: readVol('musicVol'), sfxVol: readVol('sfxVol'), fx: LS('isFx')!=='0', oppView: LS('oppView')!=='0',
   startLevel: Math.min(30,Math.max(1,parseInt(LS('startLevel'),10)||1)),
   vibMap: vibMapParse(Store.getJSON('vibMap',null)), perf: ['0','1','2'].includes(LS('isPerf'))?parseInt(LS('isPerf'),10):2
@@ -70,5 +70,5 @@ function saveSettings(){
   SV('isShowGhost',settings.ghost?1:0); SV('isVabiration',settings.vib?1:0);
   SV('isTouchControl',settings.touch?1:0); SV('index_bg',settings.theme); SV('skin',settings.skin);
   SV('startLevel',settings.startLevel); SV('musicVol',settings.musicVol); SV('sfxVol',settings.sfxVol); SV('isFx',settings.fx?1:0); SV('oppView',settings.oppView?1:0);
-  Store.setJSON('vibMap',settings.vibMap); SV('isPerf',settings.perf); SV('dynTheme',settings.dyn?1:0);
+  Store.setJSON('vibMap',settings.vibMap); SV('isPerf',settings.perf); SV('dynTheme',settings.dyn?1:0); SV('ghostRace',settings.ghostRace?1:0);
 }

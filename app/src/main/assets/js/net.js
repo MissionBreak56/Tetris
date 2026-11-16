@@ -21,7 +21,7 @@ const Lan = {
 // Faixas aceitas: redes privadas (RFC1918 + link-local) e de VPN (Tailscale/CGNAT 100.64–127.x e Hamachi 25.x).
 const PRIVATE_NET = /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3}|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}|25\.\d{1,3}\.\d{1,3}\.\d{1,3})$/;
 const Net = {
-  PROTO: 6, PORT: 47600, MAX_LINE: 16384, HS_MS: 5000, DEAD_MS: 7000, DEAD_PLAY_MS: 5000, GRACE_MS: 20000, RC_RETRY_MS: 1000, MAX_LOG: 3000, HASH_EVERY: 120,
+  PROTO: 7, PORT: 47600, MAX_LINE: 16384, HS_MS: 5000, DEAD_MS: 7000, DEAD_PLAY_MS: 5000, GRACE_MS: 20000, RC_RETRY_MS: 1000, MAX_LOG: 3000, HASH_EVERY: 120,
   T: null, role: null, sentU: -1, st: 'idle', peer: null, hosts: [], ip: '', ips: [], rtts: [], hbN: 0, err: '', lastRx: 0, hsAt: 0, lastSend: 0, lastSentTick: -9, timer: null, onChange: null, name: '', info: '',
   ready: false, peerReady: false, sid: '', txSeq: 0, rxSeq: -1, peerAck: -1, msgLog: [], joinIp: '', joinPort: 0, beatAt: 0, rcAt: 0, rcNext: 0, rcBusy: false, rcTries: 0, rcWhy: '', resumes: 0,
   now() { return Date.now(); },
@@ -98,7 +98,8 @@ const Net = {
     else if (m.k === 'emote') Social.onEmote(m);
     else if (m.k === 'in') { if (this.st === 'playing' && Versus.net) this.onIn(m); }
     else if (m.k === 'rs') { if (this.st === 'playing' && Versus.net && Number.isInteger(m.a)) this.resendFrom(m.a); }
-    else if (m.k === 'h') { if (this.st === 'playing' && Versus.net) Versus.netRecvHash(m); }
+    else if (m.k === 'h') { if ((this.st === 'playing' || this.st === 'ended') && Versus.net) Versus.netRecvHash(m); }
+    else if (m.k === 'sync') { if (this.st === 'playing' && Versus.net && this.role === 'client') Versus.netRecvSync(m); }
   },
   onHello(m) {
     if (this.st !== 'handshake' || this.peer) return;

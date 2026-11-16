@@ -37,7 +37,7 @@ O Versus local (contra a IA ou dois jogadores no mesmo aparelho) continua com a 
   até alguém conectar; cliente = `scan` (escuta anúncios) ou `join` por IP. Uma única conexão; mensagens em **linhas UTF-8**
   (limite 16 KB; excedeu = conexão fechada). `listen(porta)` reabre a porta **sem anunciar a sala** (usado na retomada de partida). `MainActivity` expõe `lanHost/lanListen/lanScan/lanJoin/lanSend/lanClose/lanIp` ao JavaScript
   e mantém um `MulticastLock` durante a busca.
-- **Protocolo** (`js/net.js`, versão 6, JSON por linha): `hello{p,eng,name}` / `nack` / `start{seed,sid}` / `again` / `in{s,a,u,e}` / `rs{a}` / `resume{p,eng,sid,a}` / `h{t,h}` / `p{t}` / `pong{t}` / `bye`.
+- **Protocolo** (`js/net.js`, versão 7, JSON por linha): `hello{p,eng,name,av}` / `nack` / `start{seed,sid}` / `again` (revanche: cada lado avisa que quer) / `in{s,a,u,e}` / `rs{a}` / `resume{p,eng,sid,a}` / `h{t,h}` / `sync{t,st}` (estado do anfitrião) / `emote{i}` / `p{t}` / `pong{t}` / `bye`.
   Nada além de `hello` é aceito antes do aperto de mão; valores são validados (inteiros, limites, nomes sanitizados). Versão de protocolo diferente é recusada.
 - **Sincronização por previsão com correção (rollback)** — latência dos seus comandos ≈ 0:
   os dois aparelhos simulam **os dois tabuleiros** com a mesma semente (motor determinístico, ver replays). Suas ações valem **no próximo tick**
@@ -48,10 +48,15 @@ O Versus local (contra a IA ou dois jogadores no mesmo aparelho) continua com a 
 - **Fim de partida confirmado**: derrota/vitória só vale quando todas as ações anteriores ao fim são conhecidas; o estado final vem do snapshot
   do tick do fim, idêntico nos dois aparelhos (um topo "previsto" que depois some com uma ação atrasada é desfeito).
 - **Detecção de divergência**: a cada 120 ticks cada lado envia o hash do estado **confirmado** (o grid entra só como ocupação 0/1: as cores vêm do tema de cada aparelho e podem diferir) (a partir dos snapshots) dos dois tabuleiros;
-  hash diferente encerra a partida ("dessincronizaram") sem registrar estatística. Mensagens inválidas, fora de ordem ou além da janela também abortam.
+  hash diferente **não encerra mais na hora**: o anfitrião é a referência e envia o estado confirmado daquele tick (`sync`, grid em letras — independente do tema), o cliente volta a ele e re-simula
+  com as ações já recebidas (`Versus.netDesync` / `netRecvSync`). Até 3 correções por partida; a 4ª, estado inválido ou ausente em 5 s encerra ("dessincronizaram") sem estatística.
+  No **fim** da partida os dois também conferem o hash do estado final antes de encerrar (uma divergência nos últimos ticks não dá resultados diferentes). Mensagens inválidas, fora de ordem ou além da janela abortam.
 - **Regra online — linhas cinzas**: a cada **2 linhas coloridas** que um jogador limpa, **uma linha cinza (lixo) do próprio tabuleiro dele é quebrada** (a de baixo primeiro; as de cima descem).
   Linhas de lixo que ele limpa não contam; sobra 0 ou 1 linha para a conta seguinte (`Versus.gl`, parte do estado/snapshot/hash). Roda dentro da simulação (`Versus.onLock` → `breakGray`), então é idêntica nos dois
-  aparelhos (por isso o protocolo subiu para 6). Só vale online; Versus contra a IA / 2 jogadores seguem sem essa regra.
+  aparelhos. Vale em **todos** os modos Versus (online, contra a IA e 2 jogadores na mesma tela).
+- **Social**: `js/social.js`. **Revanche** só começa quando os DOIS tocam em "Revanche" (o botão mostra "Aguardando o oponente…" e avisa quando o outro quer; pedido que chega antes de a sua partida terminar é guardado).
+  **Placar contra cada oponente** (por perfil, `h2h`: vitórias × derrotas por nome; partida interrompida não conta; aparece na sala e na tela final). **Emotes** (💬, 8 opções, limite de 1 por 1,2 s, só online).
+  **Avatar** do perfil vai no `hello` (índice validado) e aparece no nome do oponente.
 - **Ritmo do relógio e aviso de espera**: se um aparelho engasga (GC, notificação, app em 2º plano por instantes), o outro ficava "encostado" no limite da previsão
   **para sempre** (o adiantamento nunca diminuía) e mostrava "Aguardando o oponente…" com o jogo fluindo. Agora quem está adiantado (mínimo recente de
   `ticks − (remoteUpto+1)` acima de ≈ meia latência + 6 ticks) anda até **20% mais devagar** (`Versus.netPace`, só escala o tempo — os ticks seguem iguais, sem risco de

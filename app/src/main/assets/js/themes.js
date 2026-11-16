@@ -59,7 +59,7 @@ const Theme = {
     const old = Object.assign({}, COLORS); this.override = id; applyTheme();
     if (typeof G !== 'undefined' && G && G.grid) for (const row of G.grid) for (let c = 0; c < row.length; c++) { const col = row[c]; if (!col) continue; const k = PIECE_KEYS.find((x) => old[x] === col); if (k) row[c] = COLORS[k]; }   // peças já travadas acompanham a nova paleta
   },
-  onGame(g) { if (settings.dyn && !SIM && !(typeof Versus !== 'undefined' && Versus.active) && g && g.mode <= 7) this.setOverride(this.dynFor(g.level)); else this.clearOverride(); },
+  onGame(g) { if (SIM) return; if (settings.dyn && !SIM && !(typeof Versus !== 'undefined' && Versus.active) && g && g.mode <= 7) this.setOverride(this.dynFor(g.level)); else this.clearOverride(); },
   onLevel(g) { if (settings.dyn && this.override != null && !SIM && g && g.mode <= 7) this.setOverride(this.dynFor(g.level)); },
   clearOverride() { if (this.override != null) this.setOverride(null); },
   get(id) { if (typeof id === 'number' && THEMES[id]) return this.builtin(id); return this.customs().find((c) => c.id === id) || null; },
