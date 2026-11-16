@@ -25,7 +25,8 @@
 | 29 | Torneios | `js/tournament.js` |
 | 30 | Backup/restauração transacional | `js/backup.js` |
 
-| extra | Modo online em rede local (lockstep determinístico) | `js/net.js`, `LanNet.java`, `docs/ONLINE.md` |
+| extra | Modo online em rede local (lockstep determinístico, reconexão, recuperação de dessincronia, revanche, placar, emotes) | `js/net.js`, `js/social.js`, `LanNet.java`, `docs/ONLINE.md` |
+| extra | v1.7: músicas, vibração por ação, economia de bateria, IA até Mestre, avatares/PIN, temas/skins com estrelas, tema dinâmico, fantasma do recorde, pacote de replays, backup automático do Android | `js/music.js`, `js/perf.js`, `js/lock.js`, `js/ghost.js`, `js/themes.js`, `js/skins.js` |
 
 ## Decisões e correções registradas
 - **S em rotação 2 virava Z** (defeito original): corrigido; `ENGINE_VERSION` = `E2`. Teste de geometria cobre todas as peças.

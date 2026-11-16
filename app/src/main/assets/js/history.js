@@ -38,7 +38,8 @@ const Results = {
     History.add(this.entry(r));
     const rec = Records.update(r);
     r.rank = Ranking.submit(r);
-    if (typeof G !== 'undefined' && G) Replays.capture(G);
+    const rid = typeof G !== 'undefined' && G ? Replays.capture(G) : null; r.replayId = rid;
+    if (rec.isBest && rid != null) Ghost.saveBest(rid);                   // o recorde vira o fantasma do modo
     return rec;
   },
   render(r, rec) {
@@ -58,6 +59,7 @@ const Results = {
     if (r.rank) box.appendChild(h('div', { class: 'newrec', text: '🏅 ' + r.rank + 'º lugar no seu ranking' }));
     if (r.dailyRec && r.dailyRec.first) box.appendChild(h('div', { class: 'newrec', text: '📅 Desafio diário concluído! +1 ⭐' }));
     (r.unlocked || []).forEach((a) => box.appendChild(h('div', { class: 'newrec', text: '🏆 Conquista: ' + a.name + (a.reward ? ' · +' + a.reward + ' ⭐' : '') })));
+    if (r.replayId != null) { const sb = btn('Compartilhar replay', () => { if (!Replays.shareId(r.replayId)) sb.textContent = 'Replay copiado (cole onde quiser)'; }); box.appendChild(sb); }
     if (rec.isBest) box.appendChild(h('div', { class: 'newrec', text: '★ Novo recorde' + (rec.prev ? ' (anterior: ' + (sprint ? fmtMsP(rec.prev) : fmtNum(rec.prev)) + ')' : '') }));
   },
 };

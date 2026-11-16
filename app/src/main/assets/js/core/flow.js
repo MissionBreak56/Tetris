@@ -8,7 +8,7 @@ function restartAnim(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.
 
 function startGame(mode,opts){
   if(mode===8){ Versus.start(opts.cfg); return; }
-  try{ac();}catch(e){} hideAll(); showTutBanner(false); newGame(mode,opts);
+  try{ac();}catch(e){} hideAll(); showTutBanner(false); newGame(mode,opts); Ghost.onGame(G);
   $('pauseBtn').style.display='flex';
   let n=3; state='COUNT';
   const cd=$('count'); cd.style.display='flex';
@@ -67,7 +67,7 @@ function leaveGame(){
   if(G&&G.rules&&G.rules.recordOnExit&&!G.overDone&&G.ms>3000){ G.overDone=true; Results.commit(Results.compile(G,'exit')); }
   goMenu();
 }
-function goMenu(){ state='MENU'; stopMusic(); G=null; Theme.clearOverride(); Social.syncUi(); hideAll(); show('menu'); showTutBanner(false); Replay.stop(); Versus.stop();
+function goMenu(){ state='MENU'; stopMusic(); G=null; Ghost.clear(); Theme.clearOverride(); Social.syncUi(); hideAll(); show('menu'); showTutBanner(false); Replay.stop(); Versus.stop();
   $('pauseBtn').style.display='none'; canvas.style.filter=''; }
 
 /* ================= UPDATE ================= */

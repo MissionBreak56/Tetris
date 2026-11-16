@@ -56,7 +56,7 @@ test('conexão: aperto de mão leva os dois ao lobby com os nomes do oponente', 
   assert.equal(P.T.a.hosted[1], 47600); assert.deepEqual(P.T.b.joined, ['192.168.0.5', 47600]);
 });
 test('conexão: versão do protocolo ou do motor diferente é recusada com mensagem', () => {
-  for (const bad of [{ p: 5, eng: 'E2' }, { p: 6, eng: 'E1' }]) {
+  for (const bad of [{ p: 6, eng: 'E2' }, { p: 7, eng: 'E1' }]) {
     const h = load(1); const fake = { available: () => true, host() {}, scan() {}, join() {}, close() { this.closed = true; }, send(l) { this.out.push(l); }, out: [] };
     h.sb.__T = fake; h.run('Net.T=__T'); NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
     NetOf(h)._line(JSON.stringify(Object.assign({ k: 'hello', name: 'X' }, bad)));
@@ -69,13 +69,13 @@ test('conexão: mensagens malformadas, grandes ou antes do hello são ignoradas'
   NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
   for (const junk of ['', 'x', '[]', '5', 'null', '{"k":5}', '{"k":"start","seed":1}', '{"k":"in","u":1,"e":[]}', 'x'.repeat(20000), '{"k":"hello","p":1,"eng":"E2"' ]) NetOf(h)._line(junk);
   assert.equal(NetOf(h).st, 'handshake'); assert.equal(NetOf(h).peer, null);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 6, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 7, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
   assert.equal(NetOf(h).st, 'lobby'); assert.ok(!/[<>\n]/.test(NetOf(h).peer.name) && NetOf(h).peer.name.length <= 16);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 6, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 7, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
 });
 test('conexão: nome igual ao seu recebe sufixo; tempo esgotado no aperto de mão desconecta', () => {
   const h = load(1); h.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; h.run('Net.T=__T');
-  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 6, eng: 'E2', name: 'Jogador 1' }));
+  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 7, eng: 'E2', name: 'Jogador 1' }));
   assert.equal(NetOf(h).peer.name, 'Jogador 1 (2)');
   const g = load(1); g.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; g.run('Net.T=__T');
   NetOf(g).host(); NetOf(g)._ev({ e: 'connected' }); let t = Date.now(); NetOf(g).now = () => t; NetOf(g).hsAt = t; t += 6000; NetOf(g).heartbeat();
@@ -101,12 +101,55 @@ test('lobby: só o anfitrião inicia; cliente ignora "start" inválido e aceita 
 });
 
 /* ---------------- sincronia (lockstep) ---------------- */
-test('sincronia: adulterar um tabuleiro é detectado pelo hash e encerra os dois lados', () => {
-  const P = startMatch(pair({ lat: 1 })); P.tick(60);
-  V(P.B).B[1].score += 500;                                      // divergência artificial
-  for (let i = 0; i < 400 && !(V(P.A).over && V(P.B).over); i++) P.tick(1);
-  assert.equal(V(P.A).over && V(P.B).over, true); assert.match(V(P.A).result.reason, /dessincronizaram/); assert.equal(V(P.A).result.aborted, true);
-  assert.equal(plain(P.A.get('StatsMgr').load()).all.games, 0, 'partida abortada não gera estatística');
+test('sincronia: adulterar um tabuleiro é detectado pelo hash e CORRIGIDO (cliente volta ao estado do anfitrião); a partida segue idêntica, sem aborto', () => {
+  for (const lat of [0, 1, 6]) {
+    const P = logInputs(startMatch(pair({ lat, jitter: 1, seed: 13 }))), inp = gentle(13); P.tick(60);
+    V(P.B).B[1].score += 500;                                                              // divergência artificial no cliente
+    for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+    const a = V(P.A), b = V(P.B); assert.ok(a.over && b.over, 'terminou lat=' + lat); assert.equal(a.result.aborted, undefined, a.result.reason); assert.equal(b.result.aborted, undefined, b.result.reason);
+    assert.equal(b.net.desyncs, 1, 'uma correção (lat=' + lat + ')'); assert.equal(a.snapHash(a.snap()), b.snapHash(b.snap())); assert.deepEqual(plain(a.result), plain(b.result));
+    P.A.run('Versus.showEnd()'); assert.equal(plain(P.A.get('StatsMgr').load()).all.games, 1, 'partida corrigida conta normalmente');
+  }
+});
+test('sincronia: dessincronia nos snapshots também é corrigida; divergência no ANFITRIÃO vale (ele é a referência) e os dois terminam iguais', () => {
+  const P = logInputs(startMatch(pair({ lat: 1, seed: 14 }))), inp = gentle(14); P.tick(60);
+  V(P.B).B[1].score += 500; Object.values(V(P.B).net.snaps).forEach((s) => { s.B[1].score += 500; });
+  for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+  assert.equal(V(P.A).result.aborted, undefined, V(P.A).result.reason); assert.equal(V(P.A).snapHash(V(P.A).snap()), V(P.B).snapHash(V(P.B).snap()));
+  const Q = startMatch(pair({ lat: 2, seed: 15 })); P.tick(0); Q.tick(60); V(Q.A).B[0].grid[19][0] = '#707070';                 // adulteração no anfitrião: o cliente adota
+  for (let i = 0; i < 6000 && !(V(Q.A).over && V(Q.B).over); i++) Q.tick(1, gentle(15));
+  assert.equal(V(Q.A).result.aborted, undefined, V(Q.A).result.reason); assert.equal(V(Q.B).result.aborted, undefined); assert.equal(V(Q.A).snapHash(V(Q.A).snap()), V(Q.B).snapHash(V(Q.B).snap()));
+  assert.equal(V(Q.B).net.desyncs, 1); assert.equal(V(Q.A).net.desyncs, 1);
+});
+test('sincronia: cores de tema diferentes nos dois aparelhos não atrapalham a correção (estado trafega em letras, não em cores)', () => {
+  const P = logInputs(startMatch(pair({ lat: 2, seed: 16 }))), inp = gentle(16);
+  P.A.run("Object.assign(COLORS, { I: '#00e5ff', J: '#3a6bff', L: '#ff9f1c', O: '#ffe066', S: '#3ddc84', T: '#b266ff', Z: '#ff4d6d' })"); P.B.run("Object.assign(COLORS, { I: '#111111', J: '#222222', L: '#333333', O: '#444444', S: '#555555', T: '#666666', Z: '#777777' })");
+  P.tick(200); V(P.B).B[0].lines += 3;
+  for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+  assert.equal(V(P.A).result.aborted, undefined, V(P.A).result.reason); assert.equal(V(P.B).result.aborted, undefined, V(P.B).result.reason); assert.equal(V(P.A).snapHash(V(P.A).snap()), V(P.B).snapHash(V(P.B).snap()));
+  const enc = V(P.A).encodeSnap(V(P.A).snap()), line = JSON.stringify({ k: 'sync', t: 120, st: enc }); assert.ok(line.length < NetOf(P.A).MAX_LINE * 0.6, 'cabe numa linha (' + line.length + ' bytes)');
+  assert.ok(!/#[0-9a-f]{6}/i.test(line), 'nenhuma cor de tema no estado enviado'); const back = V(P.B).decodeSnap(JSON.parse(line).st); assert.equal(V(P.B).snapHash(back), V(P.A).snapHash(V(P.A).snap()), 'ida e volta preserva o estado');
+});
+test('sincronia: mais de 3 correções na mesma partida encerram (a dessincronia é persistente); sync inválido/alheio é recusado', () => {
+  const P = startMatch(pair({ lat: 1, seed: 17 })), inp = gentle(17); P.tick(30);
+  for (let k = 0; k < 4; k++) {
+    V(P.B).B[0].score += 100 + k;
+    for (let i = 0; i < 400 && !V(P.B).over && V(P.B).net.desyncs === k; i++) P.tick(1, inp);
+    if (k < 3) { assert.equal(V(P.B).net.desyncs, k + 1, 'correção ' + (k + 1)); assert.equal(V(P.B).over, false, 'ainda jogando após a correção ' + (k + 1)); for (let i = 0; i < 30; i++) P.tick(1, inp); }
+  }
+  for (let i = 0; i < 60 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, inp);
+  assert.ok(V(P.B).over && V(P.B).result.aborted, 'abortou na 4ª'); assert.match(String(V(P.B).result.reason), /dessincronizaram/);
+  for (const bad of [{ k: 'sync', t: 120, st: { B: [] } }, { k: 'sync', t: 7, st: {} }, { k: 'sync', t: 'x', st: {} }, { k: 'sync', t: 120 }, { k: 'sync', t: 120, st: { B: [{}, {}], pend: [0, 0], sent: [0, 0], gl: [0, 0], vr: 1 } }]) {
+    const Q = startMatch(pair({ lat: 0, seed: 18 })); Q.tick(40); NetOf(Q.B)._line(JSON.stringify(bad)); assert.equal(V(Q.B).over, true, JSON.stringify(bad)); assert.match(V(Q.B).result.reason, /Estado inválido/);
+  }
+  const H = startMatch(pair({ lat: 0, seed: 19 })); H.tick(40); NetOf(H.A)._line(JSON.stringify({ k: 'sync', t: 120, st: {} })); assert.equal(V(H.A).over, false, 'o anfitrião nunca aceita sync');
+});
+test('sincronia: o cliente mostra "Sincronizando…" enquanto espera o estado e desiste se ele nunca chega', () => {
+  const P = startMatch(pair({ lat: 1, seed: 20 })), inp = gentle(20); P.tick(60); const b = V(P.B);
+  P.B.run("globalThis.__n = []; const o = txt; txt = function (s) { globalThis.__n.push(String(s)); return o.apply(null, arguments); };");
+  b.net.resync = { t: 120, at: NetOf(P.B).now() }; P.B.sb.render(); assert.ok(plain(P.B.run('globalThis.__n')).some((t) => /Sincronizando/.test(t)), 'aviso na tela');
+  for (let i = 0; i < 20; i++) P.tick(1, inp); assert.equal(b.over, false, 'espera por até 5 s');
+  b.net.resync.at = -1e9; P.tick(2); assert.equal(b.over, true); assert.match(b.result.reason, /dessincronizaram/);
 });
 test('hash: formato inválido é ignorado', () => {
   const P = startMatch(pair()); P.tick(10);
@@ -569,12 +612,6 @@ test('ação remota além da janela de snapshots é rejeitada (não há como cor
   // tick muito antigo em relação à janela
   const Q = startMatch(pair({ lat: 0 })); Q.tick(5); Q.hold = true; Q.tick(40); const qa = V(Q.A); qa.net.remoteUpto = -1;
   NetOf(Q.A)._line(JSON.stringify({ k: 'in', u: 0, e: [[1, 1]] })); assert.equal(qa.result && qa.result.aborted, qa.ticks - 1 > qa.SNAP_WIN ? true : qa.result && qa.result.aborted);
-});
-test('sincronia: adulterar um tabuleiro (inclusive nos snapshots) é detectado pelo hash do estado confirmado', () => {
-  const P = startMatch(pair({ lat: 1 })); P.tick(60);
-  V(P.B).B[1].score += 500; Object.values(V(P.B).net.snaps).forEach((s) => { s.B[1].score += 500; });
-  for (let i = 0; i < 600 && !(V(P.A).over && V(P.B).over); i++) P.tick(1);
-  assert.equal(V(P.A).over && V(P.B).over, true); assert.match(V(P.A).result.reason, /dessincronizaram/); assert.equal(plain(P.A.get('StatsMgr').load()).all.games, 0);
 });
 test('lixo/ataques e níveis diferentes salvos nos aparelhos não divergem (com correção)', () => {
   const P = pair({ lat: 5, jitter: 3, seed: 21 }); P.A.get('settings').startLevel = 9; P.B.get('settings').startLevel = 1;

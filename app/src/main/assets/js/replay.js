@@ -100,6 +100,20 @@ const Replays = {
   remove(id) { this.store(this.load().filter((x) => x.id !== id)); },
   /* ---------- exportar / importar ---------- */
   pack(rep) { const data = JSON.stringify(rep); return JSON.stringify({ type: 'tetris-replay', v: 1, sum: fnv(data), data: rep }); },
+  /** Vários replays num arquivo só (favoritos). */
+  packAll(list) { const data = list.map((x) => x.rep); return JSON.stringify({ type: 'tetris-replays', v: 1, sum: fnv(JSON.stringify(data)), data }); },
+  /** Compartilha pelo Android; fora do app copia o texto para a área de transferência. Devolve true se abriu o compartilhamento. */
+  shareId(id) {
+    const x = this.load().find((y) => y.id === id); if (!x) return false; const text = this.pack(x.rep);
+    if (Native.available()) { Native.share('Replay do Tetris', text); return true; }
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text); } catch (e) {} return false;
+  },
+  unpackAll(text) {
+    let d; try { d = JSON.parse(text); } catch (e) { return { ok: false, errors: ['Texto não é um JSON válido'] }; }
+    if (!d || d.type !== 'tetris-replays' || d.v !== 1 || !Array.isArray(d.data) || !d.data.length || d.data.length > 20) return { ok: false, errors: ['Não é um pacote de replays do Tetris'] };
+    if (d.sum !== fnv(JSON.stringify(d.data))) return { ok: false, errors: ['Checksum não confere (arquivo alterado ou incompleto)'] };
+    return { ok: true, errors: [], reps: d.data };
+  },
   unpack(text) {
     if (typeof text !== 'string' || !text.trim()) return { ok: false, errors: ['Nada para importar'] };
     if (text.length > this.MAX_TEXT) return { ok: false, errors: ['Arquivo grande demais'] };
@@ -110,6 +124,15 @@ const Replays = {
     return { ok: true, errors: [], rep: d.data };
   },
   importText(text) {
+    if (typeof text === 'string' && text.length <= this.MAX_TEXT && /"type"\s*:\s*"tetris-replays"/.test(text.slice(0, 200))) {              // pacote: importa um por um (cada replay é reproduzido e conferido)
+      const p = this.unpackAll(text); if (!p.ok) return p; let count = 0, skipped = 0; const errs = [];
+      for (const rep of p.reps) {
+        const v = this.verify(rep); if (!v.ok) { skipped++; errs.push(v.errors[0]); continue; }
+        if (this.load().find((x) => x.rep.t === rep.t && x.rep.seed === rep.seed && x.rep.ticks === rep.ticks)) { skipped++; continue; }
+        this.add(rep, false); count++;
+      }
+      return count ? { ok: true, errors: [], bundle: true, count, skipped } : { ok: false, errors: [skipped ? 'Nenhum replay novo no pacote' + (errs.length ? ' (' + errs[0] + ')' : '') : 'Pacote vazio'] };
+    }
     const u = this.unpack(text); if (!u.ok) return u;
     const dup = this.load().find((x) => x.rep.t === u.rep.t && x.rep.seed === u.rep.seed && x.rep.ticks === u.rep.ticks);
     if (dup) return { ok: false, errors: ['Este replay já está na sua lista'] };
@@ -154,7 +177,18 @@ function openReplays() {
     const l = Replays.load();
     if (!l.length) b.appendChild(h('div', { class: 'sub', text: 'Nenhum replay ainda. Termine uma partida para gravar.' }));
     l.forEach((x) => b.appendChild(btn((x.fav ? '★ ' : '') + Replays.title(x), () => openReplayItem(x.id))));
+    if (l.some((x) => x.fav)) b.appendChild(btn('Exportar todos os favoritos', openReplayExportAll));
     b.appendChild(btn('Importar replay', openReplayImport));
+  });
+}
+/** Todos os favoritos num arquivo só (importar aceita este pacote). */
+function openReplayExportAll() {
+  const favs = Replays.load().filter((x) => x.fav); if (!favs.length) return;
+  Sheet.push('Exportar favoritos', (b) => {
+    const text = Replays.packAll(favs), name = 'tetris-replays-' + Date.now() + '.json';
+    b.appendChild(h('div', { class: 'hint', text: favs.length + ' replay(s) · ' + Math.ceil(text.length / 1024) + ' KB. Ao importar, cada partida é reproduzida e conferida.' }));
+    if (Native.available()) b.appendChild(btn('Compartilhar', () => Native.share('Replays do Tetris', text)));
+    const out = h('div', { class: 'errs' }); b.appendChild(btn('Salvar arquivo', () => Native.saveFile(name, 'application/json', text, (ok) => { out.textContent = ok ? '✓ Arquivo salvo' : 'Não foi possível salvar'; out.className = 'errs' + (ok ? ' ok' : ''); }))); b.appendChild(out);
   });
 }
 function openReplayItem(id) {
@@ -183,7 +217,7 @@ function openReplayExport(id) {
 function openReplayImport() {
   Sheet.push('Importar replay', (b) => {
     const ta = h('textarea', { class: 'txt', rows: '5', placeholder: 'Cole aqui o texto do replay' }); const out = h('div', { class: 'errs' });
-    const run = (t) => { const r = Replays.importText(t); if (r.ok) { out.textContent = '✓ Replay importado e verificado'; out.className = 'errs ok'; } else { out.textContent = r.errors.join(' · '); out.className = 'errs'; } };
+    const run = (t) => { const r = Replays.importText(t); if (r.ok) { out.textContent = r.bundle ? '✓ ' + r.count + ' replay(s) importado(s) e verificado(s)' + (r.skipped ? ' · ' + r.skipped + ' ignorado(s)' : '') : '✓ Replay importado e verificado'; out.className = 'errs ok'; } else { out.textContent = r.errors.join(' · '); out.className = 'errs'; } };
     b.appendChild(ta); b.appendChild(out); b.appendChild(btn('Importar texto', () => run(ta.value)));
     b.appendChild(btn('Escolher arquivo…', () => Native.pickFile((t, err) => { if (err || t == null) { out.textContent = err || 'Falha ao abrir'; out.className = 'errs'; } else run(t); })));
   });
