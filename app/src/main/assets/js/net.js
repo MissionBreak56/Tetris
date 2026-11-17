@@ -24,6 +24,8 @@ const Net = {
   PROTO: 7, PORT: 47600, MAX_LINE: 16384, HS_MS: 5000, DEAD_MS: 7000, DEAD_PLAY_MS: 5000, GRACE_MS: 20000, RC_RETRY_MS: 1000, MAX_LOG: 3000, HASH_EVERY: 120,
   T: null, role: null, sentU: -1, st: 'idle', peer: null, hosts: [], ip: '', ips: [], rtts: [], hbN: 0, err: '', lastRx: 0, hsAt: 0, lastSend: 0, lastSentTick: -9, timer: null, onChange: null, name: '', info: '',
   ready: false, peerReady: false, sid: '', txSeq: 0, rxSeq: -1, peerAck: -1, msgLog: [], joinIp: '', joinPort: 0, beatAt: 0, rcAt: 0, rcNext: 0, rcBusy: false, rcTries: 0, rcWhy: '', resumes: 0,
+  /* ---- pausa combinada: um lado pede, o outro aceita; congela nos DOIS e só volta quando os dois saírem do menu de pausa ---- */
+  pz: { st: 'none', me: false, peer: false, at: 0, note: '' }, PZ_WAIT_MS: 15000,
   now() { return Date.now(); },
   tr() { return this.T || Lan; },
   available() { return this.tr().available(); },
@@ -31,7 +33,7 @@ const Net = {
   connected() { return ['handshake', 'lobby', 'playing', 'reconnecting', 'ended'].includes(this.st); },
   validIp(ip) { const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(ip).trim()); return !!m && m.slice(1).every((x) => +x <= 255) && PRIVATE_NET.test(String(ip).trim()); },
   stopTimer() { if (this.timer) { clearInterval(this.timer); this.timer = null; } },
-  reset() { this.stopTimer(); this.ready = false; this.peerReady = false; this.sid = ''; this.txSeq = 0; this.rxSeq = -1; this.peerAck = -1; this.msgLog = []; this.rcBusy = false; this.beatAt = 0; this.role = null; this.peer = null; this.hosts = []; this.ip = ''; this.ips = []; this.rtts = []; this.err = ''; this.st = 'idle'; },
+  reset() { this.pzClear(); this.stopTimer(); this.ready = false; this.peerReady = false; this.sid = ''; this.txSeq = 0; this.rxSeq = -1; this.peerAck = -1; this.msgLog = []; this.rcBusy = false; this.beatAt = 0; this.role = null; this.peer = null; this.hosts = []; this.ip = ''; this.ips = []; this.rtts = []; this.err = ''; this.st = 'idle'; },
   /** Encerra tudo: avisa o outro lado (se conectado) e fecha o socket. */
   disconnect() {
     if (this.connected()) this.send({ k: 'bye' });
@@ -100,6 +102,7 @@ const Net = {
     else if (m.k === 'rs') { if (this.st === 'playing' && Versus.net && Number.isInteger(m.a)) this.resendFrom(m.a); }
     else if (m.k === 'h') { if ((this.st === 'playing' || this.st === 'ended') && Versus.net) Versus.netRecvHash(m); }
     else if (m.k === 'sync') { if (this.st === 'playing' && Versus.net && this.role === 'client') Versus.netRecvSync(m); }
+    else if (m.k === 'pz') { if (this.st === 'playing' && Versus.net) this.onPz(m); }
   },
   onHello(m) {
     if (this.st !== 'handshake' || this.peer) return;
@@ -113,6 +116,7 @@ const Net = {
   heartbeat() {
     const t = this.now(), gap = this.beatAt ? t - this.beatAt : 0; this.beatAt = t;
     if (this.st === 'reconnecting') { this.rcTick(t); return; }
+    this.pzTick(t);
     if (this.st === 'handshake' && t - this.hsAt > this.HS_MS) { this.disconnectKeep('O oponente não respondeu'); return; }
     if (gap > 3000) this.lastRx = t;                           // o relógio ficou parado (app em segundo plano / tela apagada): dá o benefício da dúvida
     if (this.connected() && t - this.lastRx > (this.st === 'playing' ? this.DEAD_PLAY_MS : this.DEAD_MS)) { this.onClosed('Conexão perdida'); return; }
@@ -146,7 +150,7 @@ const Net = {
   },
   newSid() { let x = ''; for (let i = 0; i < 4; i++) x += ((Math.random() * 4294967296) >>> 0).toString(16).padStart(8, '0'); return x; },
   beginMatch(seed, sid) {
-    this.sid = sid || this.newSid(); this.txSeq = 0; this.rxSeq = -1; this.peerAck = -1; this.msgLog = []; this.rcBusy = false; this.resumes = 0;
+    this.pzClear(); this.sid = sid || this.newSid(); this.txSeq = 0; this.rxSeq = -1; this.peerAck = -1; this.msgLog = []; this.rcBusy = false; this.resumes = 0;
     this.ready = false; this.peerReady = false;
     const host = this.role === 'host', me = { kind: 'human', name: this.name || Profile.cur().name, av: Profile.avatarIdx(Profile.cur()) }, op = { kind: 'human', name: this.peer.name, av: this.peer.av };
     this.st = 'playing'; this.lastSentTick = -9; this.sentU = -1; Sheet.stack = [];
@@ -216,7 +220,67 @@ const Net = {
     this.st = 'playing'; this.rcBusy = false; this.lastRx = this.now(); this.lastSentTick = -9; this.resumes++;
     if (!this.resendFrom(m.a)) return;
     if (Versus.net) Versus.netLink(true);
-    if (this.onChange) this.onChange();
+    this.pzSync(); if (this.onChange) this.onChange();
+  },
+  /* Pausa online. Mensagens {k:'pz', t:'req'|'acc'|'dec'|'cxl'|'rdy'|'sync'}. Congelar só para de avançar os ticks (igual à queda de conexão):
+     a simulação não é alterada, então não há risco de dessincronia. A partida volta quando os DOIS tocam em Continuar. */
+  pzOk() { return this.st === 'playing' && !!Versus.net && !!Versus.net.link && !Versus.over && state === 'VERSUS'; },
+  pzUi() { if (typeof pzRender === 'function') pzRender(); },
+  pzPeerName() { return (this.peer && this.peer.name) || 'O oponente'; },
+  pzClear() {
+    const was = this.pz.st; this.pz = { st: 'none', me: false, peer: false, at: 0, note: '' };
+    if (was !== 'none' && typeof pzHideUi === 'function') pzHideUi(was === 'paused');
+  },
+  pzRequest() {
+    if (this.pz.st !== 'none' || !this.pzOk()) return false;
+    this.pz.st = 'asking'; this.pz.at = this.now(); this.send({ k: 'pz', t: 'req' }); this.pzUi(); return true;
+  },
+  pzCancel() { if (this.pz.st === 'asking') { this.pz.st = 'none'; this.send({ k: 'pz', t: 'cxl' }); this.pzUi(); } },
+  pzAnswer(yes) {
+    if (this.pz.st !== 'asked') return;
+    if (yes && this.pzOk()) { this.send({ k: 'pz', t: 'acc' }); this.pzEnter(); }
+    else { this.pz.st = 'none'; this.send({ k: 'pz', t: 'dec' }); this.pzUi(); }
+  },
+  pzEnter() {
+    this.pz = { st: 'paused', me: false, peer: false, at: 0, note: '' };
+    const v = Versus.net; if (v && v.soft && v.soft[v.local]) Versus.input(v.local, A.SOFT_OFF);   // solta a queda suave antes de congelar (a ação segue para o oponente)
+    this.pump(true);
+    if (typeof pauseEnterOnline === 'function') pauseEnterOnline();
+  },
+  /** Toquei em Continuar: a partida só volta quando o oponente também estiver pronto. */
+  pzReady() {
+    if (this.pz.st !== 'paused' || this.pz.me) return;
+    this.pz.me = true; this.send({ k: 'pz', t: 'rdy' }); this.pzCheck();
+  },
+  pzCheck() { if (this.pz.st === 'paused' && this.pz.me && this.pz.peer) this.pzResume(); else this.pzUi(); },
+  pzResume() {
+    this.pz = { st: 'none', me: false, peer: false, at: 0, note: '' };
+    if (typeof pauseLeaveOnline === 'function') pauseLeaveOnline();
+    if (Versus.net) this.pump(true);
+  },
+  pzTick(t) {
+    const z = this.pz; if ((z.st !== 'asking' && z.st !== 'asked') || t - z.at < this.PZ_WAIT_MS) return;
+    if (z.st === 'asking') { this.send({ k: 'pz', t: 'cxl' }); z.note = this.pzPeerName() + ' não respondeu ao pedido de pausa.'; }
+    z.st = 'none'; this.pzUi();
+  },
+  pzSync() { if (this.pz.st !== 'none') this.send({ k: 'pz', t: 'sync', s: this.pz.st, r: this.pz.me }); },
+  onPz(m) {
+    const z = this.pz, t = m.t;
+    if (t === 'req') {
+      if (z.st === 'asking' && this.pzOk()) { this.send({ k: 'pz', t: 'acc' }); this.pzEnter(); }          // pedidos cruzados: os dois queriam, então pausa
+      else if (z.st === 'none' && this.pzOk()) { z.st = 'asked'; z.at = this.now(); this.pzUi(); }
+      else if (z.st === 'none') this.send({ k: 'pz', t: 'dec' });
+    } else if (t === 'acc') { if (z.st === 'asking' && this.pzOk()) this.pzEnter(); }
+    else if (t === 'dec') { if (z.st === 'asking') { z.st = 'none'; z.note = this.pzPeerName() + ' recusou a pausa.'; this.pzUi(); } }
+    else if (t === 'cxl') { if (z.st === 'asked') { z.st = 'none'; z.note = this.pzPeerName() + ' cancelou o pedido de pausa.'; this.pzUi(); } }
+    else if (t === 'rdy') {
+      if (z.st === 'paused' && !z.peer) { z.peer = true; z.note = this.pzPeerName() + ' está pronto!'; this.pzCheck(); }
+    } else if (t === 'sync') {                                       // depois de reconectar: reconcilia o estado da pausa (mensagens podem ter se perdido na queda)
+      const ps = m.s, pr = !!m.r;
+      if (z.st === 'paused') { if (ps === 'paused') { if (pr && !z.peer) { z.peer = true; z.note = this.pzPeerName() + ' está pronto!'; } this.pzCheck(); } else if (ps === 'none' && z.me) this.pzResume(); }
+      else if (ps === 'paused' && this.pzOk()) { this.pzEnter(); if (pr) { this.pz.peer = true; this.pzUi(); } }
+      else if (z.st === 'asked' && ps === 'none') { z.st = 'none'; this.pzUi(); }
+    }
   },
   forfeitLocal() {
     if (!Versus.net || Versus.over) return;

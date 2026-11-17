@@ -426,9 +426,11 @@ test('durante a queda só SOFT_OFF é aceito (nenhuma entrada fica acumulada e a
   assert.equal(v.input(0, 0), false); assert.equal(v.input(0, 4), false); assert.equal(v.input(0, 7), true, 'SOFT_OFF passa');
   relink(P); P.tick(10); assert.equal(V(P.A).B[0].soft, false); assert.equal(V(P.B).B[0].soft, false);
 });
-test('botão pausar/voltar no online pede confirmação de desistência (não pausa)', () => {
+test('botão pausar/voltar no online abre a escolha (pedir pausa / abandonar) sem pausar; abandonar ainda pede confirmação', () => {
   const P = startMatch(pair()); P.tick(5); P.A.sb.handleBack();
-  assert.equal(P.A.state(), 'VERSUS'); assert.equal(P.A.els.confirmBox.classList.contains('on'), true);
+  assert.equal(P.A.state(), 'VERSUS'); assert.equal(P.A.els.pzAsk.classList.contains('on'), true);
+  const labels = P.A.els.pzAskBody.children.map((c) => c.textContent); assert.deepEqual(labels, ['Pedir pausa', 'Abandonar partida', 'Voltar ao jogo']);
+  P.A.els.pzAskBody.children[1].onclick(); assert.equal(P.A.els.confirmBox.classList.contains('on'), true);
   P.A.els.confirmYes.onclick(); assert.equal(V(P.A).over, true); assert.equal(V(P.A).result.winner, 1);
 });
 test('revanche: só começa quando os DOIS pedem (qualquer ordem); a tela final mostra o estado; volta ao menu encerra a conexão', () => {
@@ -784,4 +786,54 @@ test('Versus local: o segundo tabuleiro (IA/jogador 2) também anima (peça não
 test('modo solo continua suavizando normalmente', () => {
   const h = load(1); h.sb.newGame(1, { seed: 1 }); h.setState('PLAY'); const p = h.G().active; p.x = 6; h.sb.updateFx(1 / 60);
   assert.ok(p.age > 0 && p.dx > 3); for (let i = 0; i < 30; i++) h.sb.updateFx(1 / 60); assert.equal(p.dx, 6);
+});
+
+/* ---------------- pausa online combinada ---------------- */
+const pzOf = (h) => NetOf(h).pz;
+const ticksOf = (h) => V(h).ticks;
+const panelOn = (h, id) => h.run(`document.getElementById('${id}').classList.contains('on')`);
+test('pausa online: pedido aceito congela os dois; só volta quando os DOIS saem do menu', () => {
+  const P = startMatch(pair({ lat: 2 })); P.tick(120, randomInputs(5));
+  assert.equal(NetOf(P.A).pzRequest(), true); assert.equal(pzOf(P.A).st, 'asking');
+  P.tick(10, randomInputs(6)); assert.equal(pzOf(P.B).st, 'asked', 'B recebe o pedido'); assert.equal(panelOn(P.B, 'pzReq'), true);
+  NetOf(P.B).pzAnswer(true); P.tick(10);
+  for (const h of [P.A, P.B]) { assert.equal(pzOf(h).st, 'paused'); assert.equal(h.state(), 'PAUSED'); assert.equal(panelOn(h, 'pausePanel'), true); }
+  const ta = ticksOf(P.A), tb = ticksOf(P.B); P.tick(300);
+  assert.equal(ticksOf(P.A), ta, 'A congelado'); assert.equal(ticksOf(P.B), tb, 'B congelado');
+  NetOf(P.A).pzReady(); P.tick(20);
+  assert.equal(P.A.state(), 'PAUSED', 'A pronto, mas ainda pausado'); assert.equal(P.B.state(), 'PAUSED');
+  assert.equal(pzOf(P.B).peer, true, 'B vê que o oponente está pronto');
+  NetOf(P.B).pzReady(); P.tick(20, randomInputs(7));
+  for (const h of [P.A, P.B]) { assert.equal(h.state(), 'VERSUS'); assert.equal(pzOf(h).st, 'none'); assert.equal(panelOn(h, 'pausePanel'), false); }
+  assert.ok(ticksOf(P.A) > ta, 'voltou a andar');
+  for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, randomInputs(8));
+  assert.equal(V(P.A).result.aborted, undefined, V(P.A).result.reason); assert.equal(V(P.A).snapHash(V(P.A).snap()), V(P.B).snapHash(V(P.B).snap()), 'sem dessincronia');
+});
+test('pausa online: recusar ou cancelar não para a partida', () => {
+  const P = startMatch(pair({ lat: 1 })); P.tick(60);
+  NetOf(P.A).pzRequest(); P.tick(5); NetOf(P.B).pzAnswer(false); P.tick(5);
+  assert.equal(pzOf(P.A).st, 'none'); assert.equal(pzOf(P.B).st, 'none'); assert.equal(P.A.state(), 'VERSUS'); assert.equal(panelOn(P.B, 'pzReq'), false);
+  const t = ticksOf(P.A); P.tick(60); assert.ok(ticksOf(P.A) > t);
+  NetOf(P.B).pzRequest(); P.tick(5); assert.equal(pzOf(P.A).st, 'asked'); NetOf(P.B).pzCancel(); P.tick(5);
+  assert.equal(pzOf(P.A).st, 'none'); assert.equal(P.B.state(), 'VERSUS');
+});
+test('pausa online: pedidos cruzados pausam; pedido sem resposta expira; oponente que sai durante a pausa encerra a partida', () => {
+  const P = startMatch(pair({ lat: 3 })); P.tick(60);
+  NetOf(P.A).pzRequest(); NetOf(P.B).pzRequest(); P.tick(30);
+  assert.equal(pzOf(P.A).st, 'paused'); assert.equal(pzOf(P.B).st, 'paused');
+  NetOf(P.B).forfeitLocal(); P.tick(30);
+  assert.equal(V(P.A).over, true); assert.equal(pzOf(P.A).st, 'none'); assert.equal(panelOn(P.A, 'pausePanel'), false);
+  const Q = startMatch(pair({ lat: 1 })); Q.tick(60); Q.hold = true; NetOf(Q.A).pzRequest();
+  NetOf(Q.A).pzTick(NetOf(Q.A).now() + NetOf(Q.A).PZ_WAIT_MS + 1); assert.equal(pzOf(Q.A).st, 'none');
+});
+test('pausa online: depois de uma queda de conexão a pausa é reconciliada e o jogo continua sem dessincronia', () => {
+  const P = startMatch(pair({ lat: 2 })); P.tick(90, randomInputs(11));
+  NetOf(P.A).pzRequest(); P.tick(10); NetOf(P.B).pzAnswer(true); P.tick(10);
+  NetOf(P.B).pzReady(); P.tick(10);
+  // A ainda não confirmou: simula perda da mensagem 'rdy' enviada por B e reconciliação via sync
+  pzOf(P.A).peer = false; NetOf(P.A)._line(JSON.stringify({ k: 'pz', t: 'sync', s: 'paused', r: true })); assert.equal(pzOf(P.A).peer, true);
+  NetOf(P.A).pzReady(); P.tick(20, randomInputs(12));
+  assert.equal(P.A.state(), 'VERSUS'); assert.equal(P.B.state(), 'VERSUS');
+  for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, randomInputs(13));
+  assert.equal(V(P.A).result.aborted, undefined, V(P.A).result.reason); assert.equal(V(P.A).snapHash(V(P.A).snap()), V(P.B).snapHash(V(P.B).snap()));
 });

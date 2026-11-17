@@ -29,8 +29,8 @@ function gameOver(reason){
 }
 let pauseFrom='PLAY';
 function pauseGame(){
-  if(Versus.active&&Versus.net){                       // online: não existe pausa (o oponente continua); só desistir
-    if(state==='VERSUS'&&!document.hidden) Confirm.ask('Abandonar a partida? Você perde e o oponente vence.',()=>Net.forfeitLocal());
+  if(Versus.active&&Versus.net){                       // online: pausa combinada (um pede, o outro aceita) ou abandonar
+    if(state==='VERSUS'&&!document.hidden&&!Versus.over&&Net.pz.st!=='asked') openOnlineChoice();
     return;
   }
   if(state!=='PLAY'&&state!=='VERSUS') return;
@@ -40,15 +40,21 @@ function pauseGame(){
   try{ if(AC&&AC.suspend) AC.suspend(); }catch(e){}
   renderPause(); show('pausePanel');
 }
-function resumeGame(){ hide('pausePanel'); hide('confirmBox'); state=pauseFrom; try{ac();}catch(e){} startMusic(); }
+function resumeGame(){
+  if(Versus.active&&Versus.net&&Net.pz.st==='paused'){ Net.pzReady(); return; }      // online: só volta quando os DOIS saírem da pausa
+  hide('pausePanel'); hide('confirmBox'); state=pauseFrom; try{ac();}catch(e){} startMusic(); }
 /** Botão Voltar do Android: fecha confirmação > folha > pausa/retoma > sai do replay. */
 function handleBack(){
   if($('confirmBox').classList.contains('on')){ hide('confirmBox'); return; }
+  if($('pzReq').classList.contains('on')) return;                                    // pedido de pausa do oponente: responda Aceitar ou Recusar
+  if($('pzAsk').classList.contains('on')){ hide('pzAsk'); return; }
   if($('sheet').classList.contains('on')){ Sheet.back(); return; }
   if(state==='PLAY'||state==='VERSUS') pauseGame(); else if(state==='PAUSED') resumeGame(); else if(state==='REPLAY') goMenu();
 }
 function renderPause(){
   const b=$('pauseBody'); clearEl(b);
+  if(Versus.active&&Versus.net&&Net.pz.st==='paused'){ $('pauseTitle').textContent='Pausa online'; renderPauseOnline(b); return; }
+  $('pauseTitle').textContent='Paused!';
   if(G){ [kv('Modo',MODE_NAMES[G.mode]||'?'),kv('Score',fmtNum(G.score)),kv('Nível',G.level),kv('Linhas',G.lines),kv('Tempo',fmtMsP(G.ms))].forEach(r=>b.appendChild(r)); }
   b.appendChild(btn('Resume',resumeGame));
   b.appendChild(btn('Restart',()=>Confirm.ask('Reiniciar a partida? O progresso atual será perdido.',()=>startGame(G.mode,G.opts)),''));
@@ -61,6 +67,47 @@ function renderPause(){
   b.appendChild(slider('Volume música',0,1,0.05,()=>settings.musicVol,v=>{settings.musicVol=v;saveSettings();}));
   b.appendChild(slider('Volume efeitos',0,1,0.05,()=>settings.sfxVol,v=>{settings.sfxVol=v;saveSettings();}));
   b.appendChild(btn('Home',()=>Confirm.ask(G&&G.rules.recordOnExit?'Encerrar a sessão Zen? Ela será salva nas estatísticas.':'Sair para o menu? A partida atual será encerrada sem registro.',leaveGame),'danger'));
+}
+/* ================= PAUSA ONLINE (combinada) ================= */
+let pzToastT=null;
+function pzToast(t){ const e=$('pzToast'); e.textContent=t; e.classList.add('on'); if(pzToastT) clearTimeout(pzToastT); pzToastT=setTimeout(()=>{ e.classList.remove('on'); },3200); }
+/** Escolha ao tocar em pausar numa partida online: pedir pausa, abandonar ou voltar. A partida continua enquanto isso. */
+function openOnlineChoice(){ renderPzAsk(); show('pzAsk'); }
+function renderPzAsk(){
+  const b=$('pzAskBody'); clearEl(b); const z=Net.pz;
+  if(z.st==='asking'){ b.appendChild(h('div',{class:'stat',text:'Pedido enviado. Aguardando o oponente aceitar…'})); b.appendChild(btn('Cancelar pedido',()=>{ Net.pzCancel(); hide('pzAsk'); })); }
+  else b.appendChild(btn('Pedir pausa',()=>{ hide('pzAsk'); if(Net.pzRequest()) pzToast('Pedido de pausa enviado. Aguardando o oponente…'); }));
+  b.appendChild(btn('Abandonar partida',()=>Confirm.ask('Abandonar a partida? Você perde e o oponente vence.',()=>{ hide('pzAsk'); Net.forfeitLocal(); }),'danger'));
+  b.appendChild(btn('Voltar ao jogo',()=>hide('pzAsk')));
+}
+/** Atualiza tudo que depende do estado da pausa: pedido recebido, aviso (toast), menu de pausa e painel de escolha. */
+function pzRender(){
+  const z=Net.pz;
+  if(z.note){ pzToast(z.note); z.note=''; }
+  if(z.st==='asked'){ hide('pzAsk'); $('pzReqText').textContent=Net.pzPeerName()+' pediu para pausar a partida.'; show('pzReq'); } else hide('pzReq');
+  if(z.st==='paused'){ hide('pzAsk'); renderPause(); } else if($('pzAsk').classList.contains('on')) renderPzAsk();
+}
+function pzHideUi(wasPaused){ hide('pzAsk'); hide('pzReq'); if(wasPaused) hide('pausePanel'); }
+function pauseEnterOnline(){ pauseFrom='VERSUS'; state='PAUSED'; stopMusic(); tS=null; try{ if(AC&&AC.suspend) AC.suspend(); }catch(e){} hide('pzAsk'); hide('pzReq'); hide('confirmBox'); renderPause(); show('pausePanel'); }
+function pauseLeaveOnline(){ hide('pausePanel'); hide('confirmBox'); state='VERSUS'; try{ac();}catch(e){} startMusic(); }
+function renderPauseOnline(b){
+  const z=Net.pz, on=Net.pzPeerName();
+  b.appendChild(kv('Modo','Online'));
+  b.appendChild(kv('Tempo',fmtMsP(Versus.ticks*1000/60)));
+  if(z.peer) b.appendChild(h('div',{class:'newrec',text:'✔ '+on+' está pronto!'}));
+  else b.appendChild(h('div',{class:'sub',text:on+' ainda está na pausa.'}));
+  if(z.me) b.appendChild(h('div',{class:'stat',text:'✔ Você está pronto. Aguardando '+on+' sair da pausa…'}));
+  else b.appendChild(btn('Continuar',()=>Net.pzReady()));
+  b.appendChild(h('div',{class:'hint',text:'A partida só volta quando os dois saírem da pausa.'}));
+  b.appendChild(h('div',{class:'sec',text:'AJUSTES RÁPIDOS'}));
+  const row=h('div',{class:'row'});
+  row.appendChild(toggleBtn('Sons',()=>settings.sound,v=>{settings.sound=v;saveSettings();refreshMenu();}));
+  row.appendChild(toggleBtn('Música',()=>settings.music,v=>{settings.music=v;saveSettings();refreshMenu();}));
+  row.appendChild(toggleBtn('Ghost',()=>settings.ghost,v=>{settings.ghost=v;saveSettings();refreshMenu();}));
+  b.appendChild(row);
+  b.appendChild(slider('Volume música',0,1,0.05,()=>settings.musicVol,v=>{settings.musicVol=v;saveSettings();}));
+  b.appendChild(slider('Volume efeitos',0,1,0.05,()=>settings.sfxVol,v=>{settings.sfxVol=v;saveSettings();}));
+  b.appendChild(btn('Abandonar partida',()=>Confirm.ask('Abandonar a partida? Você perde e o oponente vence.',()=>Net.forfeitLocal()),'danger'));
 }
 /** Sair de uma partida em andamento. Zen grava a sessão (sem recorde); outros modos descartam. */
 function leaveGame(){

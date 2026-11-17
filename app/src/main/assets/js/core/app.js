@@ -43,6 +43,7 @@ $('bEmote').onclick=()=>{sfx.click();Social.togglePal();};
 $('bRetry').onclick=()=>{sfx.click();if(Versus.net||(Versus.cfg&&Versus.cfg.net)){Net.rematch();return;}startGame(G?G.mode:1,G?G.opts:undefined);};
 $('bEndHome').onclick=()=>{sfx.click();goMenu();};
 $('pauseBtn').onclick=()=>{ if(state==='PLAY'||state==='VERSUS'){sfx.click();pauseGame();} };
+$('pzYes').onclick=()=>{ sfx.click(); Net.pzAnswer(true); }; $('pzNo').onclick=()=>{ sfx.click(); Net.pzAnswer(false); };
 document.addEventListener('visibilitychange',()=>{ if(document.hidden) pauseGame(); });
 
 function msgClass(t){ return /TETRIS/.test(t)&&!/T-SPIN/.test(t)?'m-tetris':/T-SPIN/.test(t)?'m-tspin':/BACK TO BACK/.test(t)?'m-b2b':/^LEVEL/.test(t)?'m-level':/^(SINGLE|DOUBLE|TRIPLE)/.test(t)?'m-lines':SKILLS.includes(t)?'m-skill':''; }

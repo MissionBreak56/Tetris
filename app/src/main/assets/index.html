@@ -68,6 +68,9 @@
   .btn.danger{background:linear-gradient(#b3262d,#701419);border-color:#ff8a8a}
   .newrec{margin:10px 0 2px;color:var(--val);font-weight:800;text-align:center;animation:glow 1.2s ease-in-out infinite alternate}
   #confirmBox{z-index:40}
+  #pzAsk,#pzReq{z-index:30}
+  #pzToast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14%);left:50%;transform:translateX(-50%);z-index:80;display:none;max-width:86%;text-align:center;padding:10px 16px;border-radius:12px;background:rgba(10,14,30,.94);color:#fff;border:1px solid rgba(255,255,255,.3);font:700 14px sans-serif;pointer-events:none}
+  #pzToast.on{display:block}
   .slrow{display:grid;grid-template-columns:1fr 1.2fr 48px;gap:8px;align-items:center;margin:8px 0;font-size:14px}
   .slrow input{width:100%;accent-color:var(--acc)}.slrow b{color:var(--val);text-align:right;font-size:13px}
   .achv{margin:8px 0;opacity:.6}.achv.done{opacity:1}.achv .kv{border:0;padding:2px 0}
@@ -167,7 +170,11 @@
 <div class="overlay" id="sheet"><div class="panel sheetp"><h2 id="sheetTitle"></h2><div id="sheetBody"></div><button class="btn small" id="sheetBack">Voltar</button></div></div>
 <div class="overlay" id="confirmBox"><div class="panel"><div class="stat" id="confirmText"></div><div class="row"><button class="btn small" id="confirmNo">Cancelar</button><button class="btn small danger" id="confirmYes">Confirmar</button></div></div></div>
 
-<div class="overlay" id="pausePanel"><div class="panel sheetp"><h1>Paused!</h1><div id="pauseBody"></div></div></div>
+<div class="overlay" id="pausePanel"><div class="panel sheetp"><h1 id="pauseTitle">Paused!</h1><div id="pauseBody"></div></div></div>
+
+<div class="overlay" id="pzAsk"><div class="panel"><h1>Partida online</h1><div id="pzAskBody"></div></div></div>
+<div class="overlay" id="pzReq"><div class="panel"><h1>Pedido de pausa</h1><div class="stat" id="pzReqText"></div><div class="row"><button class="btn small" id="pzNo">Recusar</button><button class="btn small" id="pzYes">Aceitar</button></div></div></div>
+<div id="pzToast"></div>
 
 <div class="overlay" id="endPanel"><div class="panel">
   <h1 id="endTitle">Game Over</h1>

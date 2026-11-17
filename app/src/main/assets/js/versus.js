@@ -140,7 +140,7 @@ const Versus = {
     return { winner: 0, tie: true };
   },
   finish() {
-    if (this.over) return; this.over = true;
+    if (this.over) return; this.over = true; Net.pzClear();
     const d = this.decide(), B = this.B;
     this.result = { winner: d.winner, tie: d.tie, ticks: this.ticks, sent: this.sent.slice(), score: B.map((g) => Math.round(g.score)), lines: B.map((g) => g.lines), names: this.cfg.players.map((p) => p.name), kinds: this.cfg.players.map((p) => p.kind), level: this.cfg.players.map((p) => p.level || null) };
     if (this.cfg.headless) return;
@@ -388,7 +388,7 @@ Versus.netRecvSync = function (m) {
 };
 /** Encerra sem vencedor (dessincronia, mensagem inválida). */
 Versus.netAbort = function (why) {
-  if (this.over) return; this.over = true; const B = this.B;
+  if (this.over) return; this.over = true; Net.pzClear(); const B = this.B;
   this.result = { winner: -1, tie: false, aborted: true, reason: why, ticks: this.ticks, sent: this.sent.slice(), score: B.map((g) => Math.round(g.score)), lines: B.map((g) => g.lines), names: this.cfg.players.map((p) => p.name), kinds: ['human', 'human'] };
   Net.send({ k: 'bye' }); try { Net.tr().close(); } catch (e) {}
   state = 'VSOVER'; stopMusic(); $('pauseBtn').style.display = 'none'; Net.st = 'ended'; Net.peer = null; Net.stopTimer(); Social.syncUi();

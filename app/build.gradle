@@ -7,8 +7,8 @@ android {
         applicationId 'com.missionbreak56.tetris'
         minSdk 23
         targetSdk 35
-        versionCode 31
-        versionName '1.7.4'
+        versionCode 32
+        versionName '1.7.5'
     }
     signingConfigs {
         release {
