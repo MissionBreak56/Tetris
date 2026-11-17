@@ -54,3 +54,44 @@ jobs:
             sleep 15
           done
           gh release upload "${{ github.ref_name }}" "ios/Tetris-v${VER}.ipa" --clobber
+
+  smoke:
+    name: Teste de fumaça no simulador de iPhone
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Gerar e compilar para o simulador
+        working-directory: ios
+        run: |
+          xcodegen generate
+          xcodebuild -project Tetris.xcodeproj -scheme Tetris -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build
+      - name: Rodar no simulador, capturar a tela e montar o relatório
+        working-directory: ios
+        run: |
+          APP=build/Build/Products/Debug-iphonesimulator/Tetris.app
+          {
+            echo "== Info.plist =="; /usr/libexec/PlistBuddy -c Print "$APP/Info.plist" | head -40
+            echo "== binário =="; lipo -info "$APP/Tetris"
+            echo "== assets =="; ls "$APP/assets" | head -20; ls "$APP/assets/js" | wc -l
+            echo "== ícone =="; ls "$APP" | grep -i -E "AppIcon|Assets" || true
+          } > report.txt
+          DEV=$(xcrun simctl list devices available | grep -E "iPhone" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          echo "simulador: $DEV" >> report.txt
+          xcrun simctl boot "$DEV"; xcrun simctl bootstatus "$DEV" -b >/dev/null
+          xcrun simctl install "$DEV" "$APP"
+          xcrun simctl launch "$DEV" com.missionbreak56.tetris >> report.txt 2>&1
+          sleep 10
+          xcrun simctl io "$DEV" screenshot shot-menu.png
+          echo "== processo vivo? ==" >> report.txt
+          xcrun simctl spawn "$DEV" launchctl list | grep -i tetris >> report.txt || echo "NAO ENCONTRADO" >> report.txt
+      - name: Publicar captura e relatório (pré-release temporária)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: ios
+        run: |
+          gh release delete ios-preview --yes --cleanup-tag || true
+          gh release create ios-preview shot-menu.png report.txt --prerelease --title "iOS preview (temporário)" --notes "Captura do simulador para validação."
