@@ -57,7 +57,7 @@ jobs:
 
   smoke:
     name: Teste de fumaça no simulador de iPhone
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}      # só manual (gera captura de tela e relatório numa pré-release temporária)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

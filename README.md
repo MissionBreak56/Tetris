@@ -13,6 +13,7 @@ Tetris para Android feito do zero, sem anúncios e sem rede.
 - **Perfis locais** com dados isolados, **replays** determinísticos (exportar/importar com verificação), **backup/restauração** transacional
 - 4 temas + **editor de temas** que personaliza tudo: tabuleiro, peças e a **interface** (janelas, botões e textos), com validação de contraste, 4 skins de peças, controles e áudio personalizáveis
 - Sons e música sintetizados (WebAudio) com volumes independentes; tudo offline e sem anúncios
+- **iPhone (iOS 14+)**: o mesmo jogo roda no iPhone (projeto em `ios/`, WKWebView + ponte nativa em Swift). A release traz o `Tetris-vX.Y.Z.ipa` **sem assinatura**: instale com AltStore, Sideloadly ou similar (veja [`ios/README.md`](ios/README.md)).
 - Android 6.0+ (minSdk 23). O jogo é HTML/Canvas/JS em `app/src/main/assets` (módulos em `js/`), dentro de uma WebView. Arquitetura: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Desempenho: [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)
 
 > Nota de versão 1.3.0: corrigida a rotação de estado 2 da peça **S**, que assumia o formato de um Z. Por isso `ENGINE_VERSION` passou a `E2` (replays de versões anteriores não são compatíveis).
