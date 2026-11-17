@@ -68,7 +68,9 @@
   .btn.danger{background:linear-gradient(#b3262d,#701419);border-color:#ff8a8a}
   .newrec{margin:10px 0 2px;color:var(--val);font-weight:800;text-align:center;animation:glow 1.2s ease-in-out infinite alternate}
   #confirmBox{z-index:40}
-  #pzAsk,#pzReq{z-index:30}
+  #pzAsk{z-index:30}
+  #pzBanner{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);z-index:80;display:none;max-width:90%;text-align:center;padding:8px 14px;border-radius:12px;background:rgba(10,14,30,.9);color:#ffe066;border:1px solid #ffe066;font:800 14px sans-serif;pointer-events:none}
+  #pzBanner.on{display:block}
   #pzToast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 14%);left:50%;transform:translateX(-50%);z-index:80;display:none;max-width:86%;text-align:center;padding:10px 16px;border-radius:12px;background:rgba(10,14,30,.94);color:#fff;border:1px solid rgba(255,255,255,.3);font:700 14px sans-serif;pointer-events:none}
   #pzToast.on{display:block}
   .slrow{display:grid;grid-template-columns:1fr 1.2fr 48px;gap:8px;align-items:center;margin:8px 0;font-size:14px}
@@ -173,7 +175,7 @@
 <div class="overlay" id="pausePanel"><div class="panel sheetp"><h1 id="pauseTitle">Paused!</h1><div id="pauseBody"></div></div></div>
 
 <div class="overlay" id="pzAsk"><div class="panel"><h1>Partida online</h1><div id="pzAskBody"></div></div></div>
-<div class="overlay" id="pzReq"><div class="panel"><h1>Pedido de pausa</h1><div class="stat" id="pzReqText"></div><div class="row"><button class="btn small" id="pzNo">Recusar</button><button class="btn small" id="pzYes">Aceitar</button></div></div></div>
+<div id="pzBanner"></div>
 <div id="pzToast"></div>
 
 <div class="overlay" id="endPanel"><div class="panel">

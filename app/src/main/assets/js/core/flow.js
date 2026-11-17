@@ -30,7 +30,7 @@ function gameOver(reason){
 let pauseFrom='PLAY';
 function pauseGame(){
   if(Versus.active&&Versus.net){                       // online: pausa combinada (um pede, o outro aceita) ou abandonar
-    if(state==='VERSUS'&&!document.hidden&&!Versus.over&&Net.pz.st!=='asked') openOnlineChoice();
+    if(state==='VERSUS'&&!document.hidden&&!Versus.over){ if(Net.pz.st==='asked') Net.pzAnswer(true); else openOnlineChoice(); }   // pedido recebido: tocar em pausar aceita
     return;
   }
   if(state!=='PLAY'&&state!=='VERSUS') return;
@@ -46,7 +46,6 @@ function resumeGame(){
 /** Botão Voltar do Android: fecha confirmação > folha > pausa/retoma > sai do replay. */
 function handleBack(){
   if($('confirmBox').classList.contains('on')){ hide('confirmBox'); return; }
-  if($('pzReq').classList.contains('on')) return;                                    // pedido de pausa do oponente: responda Aceitar ou Recusar
   if($('pzAsk').classList.contains('on')){ hide('pzAsk'); return; }
   if($('sheet').classList.contains('on')){ Sheet.back(); return; }
   if(state==='PLAY'||state==='VERSUS') pauseGame(); else if(state==='PAUSED') resumeGame(); else if(state==='REPLAY') goMenu();
@@ -84,11 +83,12 @@ function renderPzAsk(){
 function pzRender(){
   const z=Net.pz;
   if(z.note){ pzToast(z.note); z.note=''; }
-  if(z.st==='asked'){ hide('pzAsk'); $('pzReqText').textContent=Net.pzPeerName()+' pediu para pausar a partida.'; show('pzReq'); } else hide('pzReq');
+  const bn=$('pzBanner');          // pedido do oponente: só uma mensagem no topo (não cobre a tela); tocar em pausar aceita
+  if(z.st==='asked'){ bn.textContent=Net.pzPeerName()+' pediu pausa. Toque em pausar para aceitar.'; bn.classList.add('on'); } else bn.classList.remove('on');
   if(z.st==='paused'){ hide('pzAsk'); renderPause(); } else if($('pzAsk').classList.contains('on')) renderPzAsk();
 }
-function pzHideUi(wasPaused){ hide('pzAsk'); hide('pzReq'); if(wasPaused) hide('pausePanel'); }
-function pauseEnterOnline(){ pauseFrom='VERSUS'; state='PAUSED'; stopMusic(); tS=null; try{ if(AC&&AC.suspend) AC.suspend(); }catch(e){} hide('pzAsk'); hide('pzReq'); hide('confirmBox'); renderPause(); show('pausePanel'); }
+function pzHideUi(wasPaused){ hide('pzAsk'); $('pzBanner').classList.remove('on'); if(wasPaused) hide('pausePanel'); }
+function pauseEnterOnline(){ pauseFrom='VERSUS'; state='PAUSED'; stopMusic(); tS=null; try{ if(AC&&AC.suspend) AC.suspend(); }catch(e){} hide('pzAsk'); $('pzBanner').classList.remove('on'); hide('confirmBox'); renderPause(); show('pausePanel'); }
 function pauseLeaveOnline(){ hide('pausePanel'); hide('confirmBox'); state='VERSUS'; try{ac();}catch(e){} startMusic(); }
 function renderPauseOnline(b){
   const z=Net.pz, on=Net.pzPeerName();

@@ -795,8 +795,10 @@ const panelOn = (h, id) => h.run(`document.getElementById('${id}').classList.con
 test('pausa online: pedido aceito congela os dois; só volta quando os DOIS saem do menu', () => {
   const P = startMatch(pair({ lat: 2 })); P.tick(120, randomInputs(5));
   assert.equal(NetOf(P.A).pzRequest(), true); assert.equal(pzOf(P.A).st, 'asking');
-  P.tick(10, randomInputs(6)); assert.equal(pzOf(P.B).st, 'asked', 'B recebe o pedido'); assert.equal(panelOn(P.B, 'pzReq'), true);
-  NetOf(P.B).pzAnswer(true); P.tick(10);
+  P.tick(10, randomInputs(6)); assert.equal(pzOf(P.B).st, 'asked', 'B recebe o pedido'); assert.equal(P.B.els.pzBanner.classList.contains('on'), true, 'só uma mensagem no topo');
+  assert.equal(panelOn(P.B, 'pzAsk'), false); assert.equal(panelOn(P.B, 'pausePanel'), false, 'não cobre a tela');
+  P.B.sb.pauseGame(); P.tick(10);                                  // aceitar = tocar em pausar
+  assert.equal(P.B.els.pzBanner.classList.contains('on'), false);
   for (const h of [P.A, P.B]) { assert.equal(pzOf(h).st, 'paused'); assert.equal(h.state(), 'PAUSED'); assert.equal(panelOn(h, 'pausePanel'), true); }
   const ta = ticksOf(P.A), tb = ticksOf(P.B); P.tick(300);
   assert.equal(ticksOf(P.A), ta, 'A congelado'); assert.equal(ticksOf(P.B), tb, 'B congelado');
@@ -812,7 +814,7 @@ test('pausa online: pedido aceito congela os dois; só volta quando os DOIS saem
 test('pausa online: recusar ou cancelar não para a partida', () => {
   const P = startMatch(pair({ lat: 1 })); P.tick(60);
   NetOf(P.A).pzRequest(); P.tick(5); NetOf(P.B).pzAnswer(false); P.tick(5);
-  assert.equal(pzOf(P.A).st, 'none'); assert.equal(pzOf(P.B).st, 'none'); assert.equal(P.A.state(), 'VERSUS'); assert.equal(panelOn(P.B, 'pzReq'), false);
+  assert.equal(pzOf(P.A).st, 'none'); assert.equal(pzOf(P.B).st, 'none'); assert.equal(P.A.state(), 'VERSUS'); assert.equal(P.B.els.pzBanner.classList.contains('on'), false);
   const t = ticksOf(P.A); P.tick(60); assert.ok(ticksOf(P.A) > t);
   NetOf(P.B).pzRequest(); P.tick(5); assert.equal(pzOf(P.A).st, 'asked'); NetOf(P.B).pzCancel(); P.tick(5);
   assert.equal(pzOf(P.A).st, 'none'); assert.equal(P.B.state(), 'VERSUS');
