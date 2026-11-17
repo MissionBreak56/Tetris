@@ -139,18 +139,20 @@ function drawLogo(){
   ctx.strokeStyle=gold; ctx.lineWidth=lw;
   ctx.beginPath(); ctx.moveTo(x,y+h); ctx.lineTo(sx,y+h); ctx.moveTo(sx+sw,y+h); ctx.lineTo(x+w,y+h);
   ctx.moveTo(x,y+h); ctx.lineTo(x,y); ctx.lineTo(x+w,y); ctx.lineTo(x+w,y+h); ctx.stroke();
-  // letras
-  const letters='TETRIS', cols=[['#ff8a4a','#d63a18'],['#ffd650','#f08a1a'],['#eef25a','#a9c82a'],['#86d84e','#2c982a'],['#86d0ff','#2f78d8'],['#dc94ff','#8a3ad0']];
-  const fs=h*.9; ctx.font='900 '+fs+'px Impact,"Arial Black",Roboto,sans-serif'; ctx.textBaseline='middle'; ctx.textAlign='left';
-  const ws=[...letters].map(l=>ctx.measureText(l).width), gap=fs*.03;
-  const total=ws.reduce((a,b)=>a+b,0)+gap*5, sc=(w-.8*C)/total;
-  let cx=x+(w-total*sc)/2;
-  [...letters].forEach((ch,i)=>{
-    ctx.save(); ctx.translate(cx,y+h*.54); ctx.scale(sc,1);
-    const gr=ctx.createLinearGradient(0,-fs*.4,0,fs*.4); gr.addColorStop(0,cols[i][0]); gr.addColorStop(1,cols[i][1]);
-    ctx.lineJoin='round'; ctx.lineWidth=Math.max(2,fs*.07); ctx.strokeStyle='rgba(0,0,0,.6)'; ctx.strokeText(ch,0,0);
-    ctx.fillStyle=gr; ctx.fillText(ch,0,0);
-    ctx.restore(); cx+=(ws[i]+gap)*sc; });
+  // letras: desenhadas como polígonos (formas largas e angulosas, brilho e contorno), sem depender de fonte do aparelho
+  const GL={"T":[80,[[[0,0],[80,0],[80,26],[55,26],[55,100],[25,100],[25,26],[0,26]]],[]],"E":[70,[[[0,0],[70,0],[66,24],[30,24],[30,38],[58,38],[54,62],[30,62],[30,76],[70,76],[74,100],[0,100]]],[]],"R":[75,[[[0,0],[60,0],[75,12],[75,45],[62,56],[78,100],[46,100],[34,62],[30,62],[30,100],[0,100]]],[[[30,22],[46,22],[46,40],[30,40]]]],"I":[34,[[[0,0],[34,0],[34,22],[0,22]],[[0,30],[34,30],[34,100],[0,100]]],[]],"S":[75,[[[0,0],[75,0],[75,24],[30,24],[30,38],[75,38],[75,100],[0,100],[0,76],[45,76],[45,62],[0,62]]],[]]}, LC=[['#ff7a45','#f0421a','#c22a0f'],['#ffd24a','#f59a1e','#d8700f'],['#f6f55a','#e6d825','#b8a010'],['#9be050','#4fb52f','#2a8020'],['#9fe4ff','#3fb0f0','#2166c8'],['#e6a8ff','#a255e0','#7227b0']], word='TETRIS', GP=8;
+  const tot=[...word].reduce((a,ch)=>a+GL[ch][0],0)+GP*5, sxs=(w-.8*C)/tot, sys=h*.8/100, top=y+h*.1;
+  let cx=x+(w-tot*sxs)/2;
+  [...word].forEach((ch,i)=>{
+    const g0=GL[ch], all=g0[1].concat(g0[2]);
+    const path=()=>{ ctx.beginPath(); all.forEach(p=>{ p.forEach((pt,k)=>{ const px=cx+pt[0]*sxs, py=top+pt[1]*sys; if(k) ctx.lineTo(px,py); else ctx.moveTo(px,py); }); ctx.closePath(); }); };
+    ctx.save(); path();
+    const gr=ctx.createLinearGradient(0,top,0,top+100*sys); gr.addColorStop(0,LC[i][0]); gr.addColorStop(.5,LC[i][1]); gr.addColorStop(1,LC[i][2]);
+    ctx.fillStyle=gr; ctx.fill('evenodd'); ctx.clip('evenodd');
+    ctx.fillStyle='rgba(255,255,255,.2)'; ctx.fillRect(cx-1,top,g0[0]*sxs+2,42*sys);
+    ctx.restore();
+    ctx.save(); path(); ctx.lineJoin='round'; ctx.lineWidth=Math.max(1.5,C*.05); ctx.strokeStyle='rgba(0,0,0,.72)'; ctx.stroke(); ctx.restore();
+    cx+=(g0[0]+GP)*sxs; });
   ctx.restore();
 }
 function drawReplayHud(){ const c=Replay.cur; if(!c) return; txt((c.done?'FIM DO REPLAY':'▶ REPLAY')+(c.paused?' · PAUSADO':' ×'+c.speed),W/2,L.fb+CELL*0.9,CELL*0.55,'#ffd54a','center','700'); }
