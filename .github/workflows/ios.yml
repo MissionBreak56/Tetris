@@ -1,0 +1,56 @@
+name: Build iOS (IPA sem assinatura)
+
+on:
+  push:
+    branches: [main]
+    paths: ['ios/**', 'app/src/main/assets/**', '.github/workflows/ios.yml']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ios:
+    name: Compilar IPA
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versão (a mesma do Android)
+        run: |
+          echo "VER=$(grep -o "versionName '[^']*'" app/build.gradle | cut -d"'" -f2)" >> $GITHUB_ENV
+          echo "BUILD=$(grep -o 'versionCode [0-9]*' app/build.gradle | cut -d' ' -f2)" >> $GITHUB_ENV
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
+      - name: Gerar o projeto Xcode
+        working-directory: ios
+        run: xcodegen generate
+      - name: Compilar (sem assinatura)
+        working-directory: ios
+        run: |
+          xcodebuild -project Tetris.xcodeproj -scheme Tetris -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            MARKETING_VERSION="$VER" CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Empacotar o IPA
+        working-directory: ios
+        run: |
+          rm -rf Payload && mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/Tetris.app Payload/
+          zip -qry "Tetris-v${VER}.ipa" Payload
+          ls -la "Tetris-v${VER}.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipa
+          path: ios/Tetris-v*.ipa
+      - name: Anexar o IPA à release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # a release é criada pelo workflow do APK; espera ela existir (até ~10 min)
+          for i in $(seq 1 40); do
+            gh release view "${{ github.ref_name }}" >/dev/null 2>&1 && break
+            sleep 15
+          done
+          gh release upload "${{ github.ref_name }}" "ios/Tetris-v${VER}.ipa" --clobber
