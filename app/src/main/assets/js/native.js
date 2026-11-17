@@ -3,6 +3,12 @@
 const Native = {
   _saved: null, _picked: null,
   available() { return typeof AndroidBridge !== 'undefined'; },
+  /** Versão instalada (versionName do APK) ou '' fora do app. */
+  version() { try { if (this.available() && typeof AndroidBridge.version === 'function') return String(AndroidBridge.version() || ''); } catch (e) {} return ''; },
+  updateCheck() { AndroidBridge.updateCheck(); },
+  updateDownload(tag) { AndroidBridge.updateDownload(tag); },
+  updateInstall() { AndroidBridge.updateInstall(); },
+  updateCancel() { AndroidBridge.updateCancel(); },
   /** { level 0-100, charging, saver } ou null fora do app (navegador). */
   battery() {
     try { if (this.available() && typeof AndroidBridge.battery === 'function') { const s = AndroidBridge.battery(); if (s) { const o = JSON.parse(s); return { level: num(o.level, 100), charging: !!o.charging, saver: !!o.saver }; } } } catch (e) {}

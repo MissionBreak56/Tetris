@@ -130,6 +130,7 @@
   .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0}.pad .btn{margin:0;width:100%;padding:14px 0;font-size:22px}
   .avgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin:6px 0}.avgrid .btn{margin:0;width:100%;padding:6px 0;font-size:20px}.avgrid .btn.sel{border-color:var(--acc);box-shadow:0 0 8px rgba(var(--glow),.8)}
   #lockPanel{z-index:60}
+  .updnotes{white-space:pre-wrap;text-align:left;max-height:30vh;overflow:auto;margin:8px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 10px}.grid2 .btn{margin:0;width:100%;padding:12px 6px}.grid2 .btn:last-child:nth-child(odd){grid-column:1/-1}
 </style>
 </head>
@@ -175,6 +176,7 @@
   <button class="btn" id="bEndHome">Home</button>
 </div></div>
 
+<div class="overlay" id="updPanel"><div class="panel"><h1 id="updTitle"></h1><div id="updBody"></div></div></div>
 <div class="overlay" id="lockPanel"><div class="panel"><h1 id="lockTitle"></h1><div id="lockBody"></div></div></div>
 
 <script src="js/storage.js"></script>
@@ -191,6 +193,7 @@
 <script src="js/ranking.js"></script>
 <script src="js/profiles.js"></script>
 <script src="js/lock.js"></script>
+<script src="js/update.js"></script>
 <script src="js/skins.js"></script>
 <script src="js/themes.js"></script>
 <script src="js/settings.js"></script>

@@ -33,13 +33,13 @@ test('botão LEVEL abre "Nível inicial" com 30 níveis, mostra o nível escolhi
 test('menu (botão AJUSTES): sem "Nível inicial" e sem "Análises (PPS/APM)"; itens organizados em grupos', () => {
   const h = load(1), Hub = h.get('Hub'), labels = Array.from(Hub.items.map((i) => i.label));
   assert.ok(!labels.some((l) => /Nível inicial|Análises|PPS|APM/.test(l)), labels.join(','));
-  for (const l of ['Preferências', 'Temas', 'Skins das peças', 'Estatísticas', 'Histórico', 'Ranking local', 'Conquistas', 'Replays', 'Perfis', 'Backup e restauração']) assert.ok(labels.includes(l), l);
+  for (const l of ['Preferências', 'Temas', 'Skins das peças', 'Estatísticas', 'Histórico', 'Ranking local', 'Conquistas', 'Replays', 'Perfis', 'Backup e restauração', 'Atualizações']) assert.ok(labels.includes(l), l);
   const ids = Array.from(Hub.groups.map((g) => g.id)); for (const it of Hub.items) assert.ok(ids.includes(it.group), it.label);
   h.els.bLevel.onclick(); assert.equal(h.els.sheetTitle.textContent, 'Ajustes');
   const kids = h.els.sheetBody.children, titles = kids.filter((c) => c.className === 'sec').map((c) => c.textContent);
   assert.deepEqual(titles, ['PERSONALIZAR', 'PROGRESSO', 'CONTA E DADOS']);
   const grids = kids.filter((c) => c.className === 'grid2'); assert.equal(grids.length, 3);
-  assert.deepEqual(grids.map((g) => g.children.map((b) => b.textContent)), [['Preferências', 'Temas', 'Skins das peças'], ['Estatísticas', 'Histórico', 'Ranking local', 'Conquistas', 'Replays'], ['Perfis', 'Backup e restauração']]);
+  assert.deepEqual(grids.map((g) => g.children.map((b) => b.textContent)), [['Preferências', 'Temas', 'Skins das peças'], ['Estatísticas', 'Histórico', 'Ranking local', 'Conquistas', 'Replays'], ['Perfis', 'Backup e restauração', 'Atualizações']]);
   grids[0].children[0].onclick(); assert.equal(h.els.sheetTitle.textContent, 'Preferências');
 });
 test('análises: módulo e script removidos', () => {

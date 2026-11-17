@@ -154,12 +154,20 @@ function drawLogo(){
   ctx.restore();
 }
 function drawReplayHud(){ const c=Replay.cur; if(!c) return; txt((c.done?'FIM DO REPLAY':'▶ REPLAY')+(c.paused?' · PAUSADO':' ×'+c.speed),W/2,L.fb+CELL*0.9,CELL*0.55,'#ffd54a','center','700'); }
+/** Rodapé da tela inicial: versão instalada + créditos ("⬆" quando há atualização). */
+function drawCredits(){
+  const v=Updater.label(), up=Updater.newer(), base=(v?v+'  ·  ':'')+'Developed by T. Marques';
+  const y=H-CELL*1.1;
+  txt((up?'⬆ ':'')+base,W/2,y,CELL*0.36,up?Theme.cur().acc:'rgba(255,255,255,.38)','center','500');
+  if(up) txt('Atualização '+Updater.tag+' disponível',W/2,y-CELL*0.55,CELL*0.34,Theme.cur().acc,'center','600');
+}
 function drawMenuHud(){
   const y=L.hudY, T=TH();
   ctx.save(); ctx.shadowColor='rgb('+T[3]+')'; ctx.shadowBlur=CELL*0.4;
   txt('SCORE',W/2,y,CELL*1.15,Theme.ui().ink,'center','500'); ctx.restore();
   txt('BEST '+(+(LS('bestScore')||0)),W/2,y+CELL*0.95,CELL*0.5,T[2],'center','600');
   txt(Profile.avatar()+' '+Profile.cur().name,W/2,y+CELL*1.55,CELL*0.4,'rgba(255,255,255,.55)','center','500');
+  drawCredits();
 }
 function drawHUD(){
   const sz=CELL*0.62, y=L.hudY;

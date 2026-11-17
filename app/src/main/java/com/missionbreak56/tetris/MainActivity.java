@@ -1,6 +1,12 @@
 package com.missionbreak56.tetris;
 
 import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.pm.PackageInstaller;
+import android.provider.Settings;
+import java.io.File;
+import java.io.FileInputStream;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -29,6 +35,9 @@ public class MainActivity extends Activity {
     private LanNet lan;
     private WifiManager.MulticastLock mlock;
     private WifiManager.WifiLock wlock;
+    private AppUpdate upd;
+    private BroadcastReceiver instRx;
+    private static final String ACTION_INSTALL = "com.missionbreak56.tetris.INSTALL_RESULT";
 
     private void lock(boolean on) {
         try {
@@ -69,6 +78,64 @@ public class MainActivity extends Activity {
         return lan;
     }
 
+    /** Atualização dentro do app: procurar/baixar (AppUpdate, GitHub Releases) e instalar (PackageInstaller). */
+    private AppUpdate upd() {
+        if (upd == null) upd = new AppUpdate(new AppUpdate.Listener() { public void event(final String json) { js("Updater._ev(" + json + ")"); } }, AppUpdate.WEB, AppUpdate.API, "MissionBreak56/Tetris");
+        return upd;
+    }
+
+    private void registerInstallReceiver() {
+        if (instRx != null) return;
+        instRx = new BroadcastReceiver() {
+            @Override public void onReceive(Context c, Intent in) {
+                int st = in.getIntExtra(PackageInstaller.EXTRA_STATUS, -1);
+                String msg = in.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
+                if (st == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                    Intent confirm = (Intent) in.getParcelableExtra(Intent.EXTRA_INTENT);
+                    if (confirm != null) { confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(confirm); }
+                    js("Updater._ev({\"e\":\"confirm\"})");
+                } else if (st == PackageInstaller.STATUS_SUCCESS) {
+                    js("Updater._ev({\"e\":\"installed\"})");
+                } else {
+                    js("Updater._ev({\"e\":\"error\",\"msg\":" + LanNet.q("A instalação não foi concluída" + (msg == null ? "" : " (" + msg + ")")) + "})");
+                }
+            }
+        };
+        IntentFilter f = new IntentFilter(ACTION_INSTALL);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(instRx, f, Context.RECEIVER_NOT_EXPORTED); else registerReceiver(instRx, f);
+    }
+
+    /** Instala o APK baixado (cache/updates). Sem a permissão "instalar apps desconhecidos" abre o ajuste do Android e avisa o JS. */
+    private void installUpdate() {
+        try {
+            File[] fs = new File(getCacheDir(), "updates").listFiles(); File apk = null;
+            if (fs != null) for (File f : fs) if (f.getName().endsWith(".apk") && (apk == null || f.lastModified() > apk.lastModified())) apk = f;
+            if (apk == null) { js("Updater._ev({\"e\":\"error\",\"msg\":\"Arquivo da atualização não encontrado. Baixe de novo.\"})"); return; }
+            if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+                startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
+                js("Updater._ev({\"e\":\"needPermission\"})"); return;
+            }
+            PackageInstaller pi = getPackageManager().getPackageInstaller();
+            PackageInstaller.SessionParams p = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            int id = pi.createSession(p);
+            PackageInstaller.Session s = pi.openSession(id);
+            try {
+                InputStream in = new FileInputStream(apk);
+                OutputStream out = s.openWrite("tetris.apk", 0, apk.length());
+                byte[] buf = new byte[65536]; int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                s.fsync(out); out.close(); in.close();
+                registerInstallReceiver();
+                Intent it = new Intent(ACTION_INSTALL); it.setPackage(getPackageName());
+                int fl = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
+                s.commit(PendingIntent.getBroadcast(this, id, it, fl).getIntentSender());
+                js("Updater._ev({\"e\":\"installing\"})");
+            } finally { s.close(); }
+        } catch (Exception e) {
+            js("Updater._ev({\"e\":\"error\",\"msg\":" + LanNet.q("Não foi possível instalar: " + e.getMessage()) + "})");
+        }
+    }
+
     /** Ponte JS -> Android (somente conteúdo local do app é carregado na WebView). */
     private class Bridge {
         @JavascriptInterface
@@ -92,6 +159,11 @@ public class MainActivity extends Activity {
                 startActivityForResult(i, REQ_SAVE);
             } });
         }
+        @JavascriptInterface public String version() { try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return ""; } }
+        @JavascriptInterface public void updateCheck() { upd().check(); }
+        @JavascriptInterface public void updateDownload(String tag) { upd().download(tag, new File(getCacheDir(), "updates")); }
+        @JavascriptInterface public void updateCancel() { upd().cancel(); }
+        @JavascriptInterface public void updateInstall() { runOnUiThread(new Runnable() { public void run() { installUpdate(); } }); }
         /** Bateria para o modo "Automático" de desempenho: {"level":0-100,"charging":bool,"saver":bool} (texto vazio se indisponível). */
         @JavascriptInterface
         public String battery() {
@@ -195,6 +267,7 @@ public class MainActivity extends Activity {
     @Override protected void onPause() { super.onPause(); web.onPause(); }
     @Override protected void onResume() { super.onResume(); web.onResume(); }
     @Override protected void onDestroy() {
+        if (instRx != null) { try { unregisterReceiver(instRx); } catch (Exception ignored) { } }
         if (lan != null) lan.close();
         lock(false);
         wifiLowLatency(false);

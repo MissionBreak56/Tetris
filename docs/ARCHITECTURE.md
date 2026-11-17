@@ -35,7 +35,7 @@ Todo o jogo é JavaScript puro, **sem dependências**, dividido em scripts clás
 5. Qualquer mudança que altere o resultado de uma partida exige **incrementar `ENGINE_VERSION`** (`js/replay.js`);
    o teste *GOLDEN* em `tests/replay.test.js` falha caso o motor mude sem isso.
 6. Módulos novos registram menus com `Hub.add` / `Modes.add` em vez de editar o código central.
-7. Módulos adicionados na v1.7: `js/music.js` (trilhas e andamento), `js/perf.js` (economia/automático), `js/lock.js` (PIN e bloqueio), `js/social.js` (revanche, placar e emotes), `js/ghost.js` (fantasma do recorde), `js/rewards.js` (estrelas ganhas/gastas).
+7. Módulos adicionados na v1.7: `js/music.js` (trilhas e andamento), `js/perf.js` (economia/automático), `js/lock.js` (PIN e bloqueio), `js/social.js` (revanche, placar e emotes), `js/ghost.js` (fantasma do recorde), `js/rewards.js` (estrelas ganhas/gastas). v1.7.1: `js/update.js` + `AppUpdate.java` (atualização dentro do app, `docs/UPDATES.md`).
 
 ## Testes
 `node --test tests/*.test.js` carrega os scripts reais em Node com um DOM simulado (`tests/harness.js`).

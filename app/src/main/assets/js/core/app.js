@@ -53,5 +53,6 @@ function showMsg2(t){ if(SIM) return; if(Versus.attachNote(t)) return; const m=$
 applyTheme(); initBG(); resize(); addEventListener('resize',resize);
 refreshMenu(); requestAnimationFrame(loop);
 if(Profile.hasPin(Profile.cur())) Lock.show();      // perfil protegido: PIN antes de qualquer coisa
+setTimeout(()=>Updater.autoCheck(),3000);              // procura atualização ao abrir (uma vez por hora)
 /* Revela a interface só depois do tema + layout + 1º quadro desenhado (o loop acima roda antes neste mesmo quadro): sem "piscar" de botões empilhados na cor padrão. */
 requestAnimationFrame(()=>{ const d=document.documentElement; if(d.classList) d.classList.remove('boot'); });
