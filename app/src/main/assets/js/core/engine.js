@@ -47,7 +47,7 @@ function spawn(){
 }
 function move(dx){
   const p=G.active; if(!p) return false;
-  if(!collides(cells(p.t,p.rot,p.x+dx,p.y),G.grid)){ p.x+=dx; sfx.move(); vib(5,'move'); G.lockT=0; tutEv('move'); return true; }
+  if(!collides(cells(p.t,p.rot,p.x+dx,p.y),G.grid)){ p.x+=dx; G.lastRot=false; sfx.move(); vib(5,'move'); G.lockT=0; tutEv('move'); return true; }
   return false;
 }
 function rotate(dir){
@@ -65,6 +65,7 @@ function hardDrop(){
   tutEv('hard');
   const start=cells(p);
   let d=0; while(!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){ p.y++; d++; }
+  if(d>0) G.lastRot=false;      // T-Spin só vale se o ÚLTIMO movimento foi um giro (cair depois do giro anula)
   const end=cells(p);
   G.score+=d*2*G.level;
   const cols={};

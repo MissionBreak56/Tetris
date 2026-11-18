@@ -130,11 +130,11 @@ function update(dt){
   const p=G.active; if(!p) return;
   const iv=interval();
   if(G.soft){
-    if(!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){ p.y++; G.score+=G.level; G.lockT=0; tutEv('soft'); }
+    if(!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){ p.y++; G.lastRot=false; G.score+=G.level; G.lockT=0; tutEv('soft'); }
   } else if(!G.rules.noGravity){
     G.fallAcc+=dt;
     while(G.fallAcc>=iv){ G.fallAcc-=iv;
-      if(!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){ p.y++; G.lockT=0; } }
+      if(!collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){ p.y++; G.lastRot=false; G.lockT=0; } }
   }
   if(collides(cells(p.t,p.rot,p.x,p.y+1),G.grid)){
     G.lockT+=dt;

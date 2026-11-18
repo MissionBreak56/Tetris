@@ -30,7 +30,7 @@
 
 ## Decisões e correções registradas
 - **S em rotação 2 virava Z** (defeito original): corrigido; `ENGINE_VERSION` = `E2`. Teste de geometria cobre todas as peças.
-- `lastRot` não é limpo ao mover/cair (possível T-Spin falso após girar e mover): **mantido** (caracterização em teste), pendente de decisão.
+- **T-Spin falso corrigido (v1.8.1, `ENGINE_VERSION` E3):** `lastRot` agora é limpo ao mover de lado, cair por gravidade, soft drop e hard drop com queda; só vale se o ÚLTIMO movimento foi um giro. Mover bloqueado (contra parede/peça) não limpa. Como muda a regra, replays antigos (E2) deixam de ser válidos e o online exige as duas pontas na mesma versão.
 - "2 Minutes" já é o modo Ultra; não foi criado modo duplicado.
 - A tela LEVEL (engrenagem) virou o menu geral (nível inicial, modos, estatísticas, temas, perfis, backup...).
 - Versus não grava replays; tutorial não grava nada; Zen/diário/personalizado/versus não entram no ranking oficial.

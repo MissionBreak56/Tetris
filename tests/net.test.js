@@ -56,7 +56,7 @@ test('conexão: aperto de mão leva os dois ao lobby com os nomes do oponente', 
   assert.equal(P.T.a.hosted[1], 47600); assert.deepEqual(P.T.b.joined, ['192.168.0.5', 47600]);
 });
 test('conexão: versão do protocolo ou do motor diferente é recusada com mensagem', () => {
-  for (const bad of [{ p: 6, eng: 'E2' }, { p: 7, eng: 'E1' }]) {
+  for (const bad of [{ p: 6, eng: 'E3' }, { p: 7, eng: 'E1' }]) {
     const h = load(1); const fake = { available: () => true, host() {}, scan() {}, join() {}, close() { this.closed = true; }, send(l) { this.out.push(l); }, out: [] };
     h.sb.__T = fake; h.run('Net.T=__T'); NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
     NetOf(h)._line(JSON.stringify(Object.assign({ k: 'hello', name: 'X' }, bad)));
@@ -69,13 +69,13 @@ test('conexão: mensagens malformadas, grandes ou antes do hello são ignoradas'
   NetOf(h).host(); NetOf(h)._ev({ e: 'connected' });
   for (const junk of ['', 'x', '[]', '5', 'null', '{"k":5}', '{"k":"start","seed":1}', '{"k":"in","u":1,"e":[]}', 'x'.repeat(20000), '{"k":"hello","p":1,"eng":"E2"' ]) NetOf(h)._line(junk);
   assert.equal(NetOf(h).st, 'handshake'); assert.equal(NetOf(h).peer, null);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 7, eng: 'E2', name: '<b>Zé</b>\nMuito longo nome demais' }));
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 7, eng: 'E3', name: '<b>Zé</b>\nMuito longo nome demais' }));
   assert.equal(NetOf(h).st, 'lobby'); assert.ok(!/[<>\n]/.test(NetOf(h).peer.name) && NetOf(h).peer.name.length <= 16);
-  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 7, eng: 'E2', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
+  NetOf(h)._line(JSON.stringify({ k: 'hello', p: 7, eng: 'E3', name: 'Outro' })); assert.notEqual(NetOf(h).peer.name, 'Outro', 'segundo hello ignorado');
 });
 test('conexão: nome igual ao seu recebe sufixo; tempo esgotado no aperto de mão desconecta', () => {
   const h = load(1); h.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; h.run('Net.T=__T');
-  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 7, eng: 'E2', name: 'Jogador 1' }));
+  NetOf(h).host(); NetOf(h)._ev({ e: 'connected' }); NetOf(h)._line(JSON.stringify({ k: 'hello', p: 7, eng: 'E3', name: 'Jogador 1' }));
   assert.equal(NetOf(h).peer.name, 'Jogador 1 (2)');
   const g = load(1); g.sb.__T = { available: () => true, host() {}, scan() {}, join() {}, close() {}, send() {} }; g.run('Net.T=__T');
   NetOf(g).host(); NetOf(g)._ev({ e: 'connected' }); let t = Date.now(); NetOf(g).now = () => t; NetOf(g).hsAt = t; t += 6000; NetOf(g).heartbeat();
@@ -838,4 +838,31 @@ test('pausa online: depois de uma queda de conexão a pausa é reconciliada e o 
   assert.equal(P.A.state(), 'VERSUS'); assert.equal(P.B.state(), 'VERSUS');
   for (let i = 0; i < 6000 && !(V(P.A).over && V(P.B).over); i++) P.tick(1, randomInputs(13));
   assert.equal(V(P.A).result.aborted, undefined, V(P.A).result.reason); assert.equal(V(P.A).snapHash(V(P.A).snap()), V(P.B).snapHash(V(P.B).snap()));
+});
+test('fuzz da pausa online: pedidos, aceites, recusas e "continuar" em momentos aleatórios nunca dessincronizam nem travam', () => {
+  let pauses = 0;
+  for (let seed = 1; seed <= 8; seed++) {
+    const P = startMatch(pair({ lat: seed % 4 })); const r = lcg(seed * 7919); let was = false;
+    const inp = randomInputs(seed + 100);
+    for (let i = 0; i < 9000 && !(V(P.A).over && V(P.B).over); i++) {
+      for (const h of [P.A, P.B]) {
+        const n = NetOf(h), z = n.pz, k = r() % 400;
+        if (z.st === 'none' && k === 0) n.pzRequest();
+        else if (z.st === 'asking' && k === 1) n.pzCancel();
+        else if (z.st === 'asked' && k < 40) n.pzAnswer(k > 5);          // maioria aceita; alguns recusam
+        else if (z.st === 'paused' && !z.me && k < 30) n.pzReady();
+      }
+      P.tick(1, inp);
+      const now = pzOf(P.A).st === 'paused'; if (now && !was) pauses++; was = now;
+    }
+    for (let i = 0; i < 4000 && !(V(P.A).over && V(P.B).over); i++) {     // se terminou pausado, os dois saem da pausa e a partida acaba
+      for (const h of [P.A, P.B]) if (NetOf(h).pz.st === 'paused') NetOf(h).pzReady();
+      for (const h of [P.A, P.B]) { const z = NetOf(h).pz; if (z.st === 'asked') NetOf(h).pzAnswer(false); }
+      P.tick(1, inp);
+    }
+    assert.ok(V(P.A).over && V(P.B).over, `seed ${seed}: partida travou (pz A=${pzOf(P.A).st} B=${pzOf(P.B).st})`);
+    assert.equal(V(P.A).result.aborted, undefined, `seed ${seed}: ` + V(P.A).result.reason);
+    assert.equal(V(P.A).snapHash(V(P.A).snap()), V(P.B).snapHash(V(P.B).snap()), `seed ${seed}: dessincronizou`);
+  }
+  assert.ok(pauses >= 8, 'o fuzz realmente pausou várias vezes: ' + pauses);
 });

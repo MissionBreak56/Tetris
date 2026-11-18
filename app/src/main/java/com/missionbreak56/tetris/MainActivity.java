@@ -119,18 +119,23 @@ public class MainActivity extends Activity {
             PackageInstaller.SessionParams p = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
             int id = pi.createSession(p);
             PackageInstaller.Session s = pi.openSession(id);
+            InputStream in = null; OutputStream out = null;
             try {
-                InputStream in = new FileInputStream(apk);
-                OutputStream out = s.openWrite("tetris.apk", 0, apk.length());
+                in = new FileInputStream(apk);
+                out = s.openWrite("tetris.apk", 0, apk.length());
                 byte[] buf = new byte[65536]; int n;
                 while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-                s.fsync(out); out.close(); in.close();
+                s.fsync(out); out.close(); out = null; in.close(); in = null;
                 registerInstallReceiver();
                 Intent it = new Intent(ACTION_INSTALL); it.setPackage(getPackageName());
                 int fl = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0);
                 s.commit(PendingIntent.getBroadcast(this, id, it, fl).getIntentSender());
                 js("Updater._ev({\"e\":\"installing\"})");
-            } finally { s.close(); }
+            } finally {
+                if (out != null) { try { out.close(); } catch (Exception ignored) { } }
+                if (in != null) { try { in.close(); } catch (Exception ignored) { } }
+                s.close();
+            }
         } catch (Exception e) {
             js("Updater._ev({\"e\":\"error\",\"msg\":" + LanNet.q("Não foi possível instalar: " + e.getMessage()) + "})");
         }
@@ -209,30 +214,32 @@ public class MainActivity extends Activity {
         if (req == REQ_SAVE) {
             boolean ok = false;
             if (res == RESULT_OK && data != null && data.getData() != null && pendingSave != null) {
+                OutputStream os = null;
                 try {
-                    OutputStream os = getContentResolver().openOutputStream(data.getData());
+                    os = getContentResolver().openOutputStream(data.getData());
                     os.write(pendingSave.getBytes("UTF-8"));
-                    os.close();
                     ok = true;
                 } catch (Exception e) { ok = false; }
+                finally { if (os != null) { try { os.close(); } catch (Exception e2) { ok = false; } } }
             }
             pendingSave = null;
             js("Native._onSaved(" + ok + ")");
         } else if (req == REQ_OPEN) {
             if (res != RESULT_OK || data == null || data.getData() == null) { js("Native._onPicked(null,'Nenhum arquivo escolhido')"); return; }
+            InputStream is = null;
             try {
-                InputStream is = getContentResolver().openInputStream(data.getData());
+                is = getContentResolver().openInputStream(data.getData());
                 ByteArrayOutputStream bo = new ByteArrayOutputStream();
                 byte[] buf = new byte[8192];
                 int n, total = 0;
                 while ((n = is.read(buf)) > 0) {
                     total += n;
-                    if (total > MAX_READ) { is.close(); js("Native._onPicked(null,'Arquivo muito grande')"); return; }
+                    if (total > MAX_READ) { js("Native._onPicked(null,'Arquivo muito grande')"); return; }
                     bo.write(buf, 0, n);
                 }
-                is.close();
                 js("Native._onPicked(" + JSONObject.quote(bo.toString("UTF-8")) + ",null)");
             } catch (Exception e) { js("Native._onPicked(null,'Falha ao ler o arquivo')"); }
+            finally { if (is != null) { try { is.close(); } catch (Exception ignored) { } } }
         }
     }
 
@@ -271,7 +278,8 @@ public class MainActivity extends Activity {
         if (lan != null) lan.close();
         lock(false);
         wifiLowLatency(false);
-        web.destroy();
+        WebView w = web; web = null;      // threads de rede/atualização não chamam mais a WebView destruída (js() confere web != null)
+        if (w != null) w.destroy();
         super.onDestroy();
     }
 

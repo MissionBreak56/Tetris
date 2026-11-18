@@ -76,3 +76,10 @@ O Versus local (contra a IA ou dois jogadores no mesmo aparelho) continua com a 
 `tests/net.test.js` simula dois aparelhos com uma rede falsa (latência 0 a 25 quadros, jitter, corte, adulteração, mensagens inválidas, desistência,
 revanche, **quedas e reconexões aleatórias com mensagens perdidas**) e compara cada partida com uma **simulação de referência offline** alimentada pelo registro real das ações (mesmo hash final, mesmos ticks e vencedor); `tests/java/LanNetTest.java` testa sockets, ordem, UTF-8, limite de linha, recusa do segundo cliente,
 descoberta UDP e erros (roda no CI).
+
+## Pausa combinada (v1.7.5+)
+No online não há pausa unilateral (o oponente continuaria jogando). O fluxo é por acordo, com mensagens `{k:'pz', t:...}`:
+`req` (pedido) → o outro vê só um aviso no topo e aceita tocando em **pausar** (`acc`) ou ignora (expira em 15 s / `cxl` / `dec`).
+Ao aceitar, os DOIS congelam (a simulação só para de avançar ticks, como na queda de conexão, então não há dessincronia) e abrem o menu **Pausa online**.
+Cada um toca em **Continuar** (`rdy`); quem toca primeiro vê "aguardando", o outro vê "✔ [nome] está pronto!". A partida só volta quando os dois estiverem prontos.
+Depois de uma reconexão, `sync` reconcilia o estado (mensagens podem se perder na queda). Pedidos cruzados pausam direto. Abandonar durante a pausa encerra a partida normalmente.

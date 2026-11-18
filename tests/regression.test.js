@@ -121,13 +121,29 @@ test('rotação: sem espaço nenhum retorna false e não altera a peça', () => 
   assert.equal(h.sb.rotate(1), false);
   assert.deepEqual(plain(G.active), before);
 });
-test('CARACTERIZAÇÃO: lastRot fica true após girar e NÃO é limpo ao mover (possível T-Spin falso — ver relatório)', () => {
-  const h = fresh();
-  put(h, 'T', 0, 3, 5);
-  h.sb.rotate(1);
-  assert.equal(h.G().lastRot, true);
-  h.sb.move(1);
-  assert.equal(h.G().lastRot, true);
+test('T-Spin: lastRot só vale se o ÚLTIMO movimento foi um giro (mover, descer por gravidade ou soft drop depois anula)', () => {
+  let h = fresh(); put(h, 'T', 0, 3, 5);
+  h.sb.rotate(1); assert.equal(h.G().lastRot, true, 'giro liga');
+  h.sb.move(1); assert.equal(h.G().lastRot, false, 'mover desliga');
+  h = fresh(); put(h, 'T', 0, 0, 5); h.sb.rotate(1);
+  while (h.sb.move(-1));                                                         // encosta na parede esquerda
+  h.sb.rotate(1); assert.equal(h.G().lastRot, true);
+  assert.equal(h.sb.move(-1), false); assert.equal(h.G().lastRot, true, 'mover bloqueado NÃO desliga');
+  h = fresh(); put(h, 'T', 0, 3, 5); h.sb.rotate(1);
+  h.sb.update(5); assert.equal(h.G().lastRot, false, 'cair por gravidade desliga');
+  h = fresh(); put(h, 'T', 0, 3, 5); h.sb.rotate(1); h.G().soft = true;
+  h.sb.update(1 / 60); assert.equal(h.G().lastRot, false, 'soft drop desliga');
+});
+test('T-Spin: girar para dentro do encaixe e travar conta; cair depois do giro não conta', () => {
+  let { h, G } = tspinSetup(false);
+  put(h, 'T', 3, 4, 17); G.lastRot = false;
+  assert.equal(h.sb.rotate(1), true); assert.equal(G.active.rot, 0); assert.equal(G.lastRot, true);
+  h.sb.lockPiece(); assert.equal(G.tspins, 1); assert.equal(G.score, 400);
+  ({ h, G } = tspinSetup(false));
+  put(h, 'T', 3, 4, 17); h.sb.rotate(1); assert.equal(G.lastRot, true);
+  G.grid[19][4] = null; G.grid[19][6] = null; G.grid[17][4] = null;          // abre o chão: a peça cai depois do giro
+  h.sb.update(5); assert.equal(G.lastRot, false);
+  h.sb.lockPiece(); assert.equal(G.tspins, 0, 'sem T-Spin falso');
 });
 
 /* ---------------- 7-Bag ---------------- */

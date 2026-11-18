@@ -77,7 +77,7 @@ const Net = {
       case 'closed': this.onClosed(String(e.why || 'Conexão encerrada')); break;
       case 'error':
         if (this.st === 'reconnecting') { this.rcBusy = false; this.rcLink = false; this.rcNext = this.now() + this.RC_RETRY_MS; break; }      // tentativa falhou: tenta de novo
-        this.stopTimer(); this.role = this.role; this.setSt('error', String(e.msg || 'Erro de rede')); break;
+        this.stopTimer(); this.setSt('error', String(e.msg || 'Erro de rede')); break;
     }
   },
   _line(s) {
