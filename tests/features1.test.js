@@ -78,7 +78,7 @@ test('Android: backup automático (Google) ligado com regras que incluem só os 
   assert.match(man, /android:allowBackup="true"/); assert.match(man, /android:fullBackupContent="@xml\/backup_rules"/); assert.match(man, /android:dataExtractionRules="@xml\/data_extraction_rules"/);
   for (const f of ['backup_rules.xml', 'data_extraction_rules.xml']) { const x = fs.readFileSync(path.join(ROOT, 'res/xml', f), 'utf8'); assert.match(x, /app_webview\/Default\/Local Storage/); assert.doesNotMatch(x.replace(/<!--[\s\S]*?-->/g, ''), /cache/i); }
   const bk = fs.readFileSync(path.join(ROOT, 'assets/js/backup.js'), 'utf8'); assert.match(bk, /Backup automático do Android/);
-  const j = fs.readFileSync(path.join(ROOT, 'java/com/missionbreak56/tetris/MainActivity.java'), 'utf8'); assert.match(j, /public String battery\(\)/);
+  const j = fs.readFileSync(path.join(ROOT, 'java/com/missionbreak56/tetris/core/GameBridge.java'), 'utf8'); assert.match(j, /public String battery\(\)/);
 });
 test('backup manual aceita as novas preferências (vibMap, isPerf) e restaura', () => {
   const h = load(1); h.run("settings.vibMap.hard = 3; settings.perf = 1; saveSettings();"); const B = h.get('Backup'), text = B.text();
