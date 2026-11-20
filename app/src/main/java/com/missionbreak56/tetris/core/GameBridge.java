@@ -9,13 +9,19 @@ import android.os.PowerManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import com.missionbreak56.tetris.network.LanNet;
+import com.missionbreak56.tetris.security.CryptoManager;
 import com.missionbreak56.tetris.security.BridgeValidator;
+import com.missionbreak56.tetris.storage.SnapshotManager;
+import com.missionbreak56.tetris.storage.StorageManager;
 import com.missionbreak56.tetris.updates.AppUpdate;
 import com.missionbreak56.tetris.updates.UpdateInstaller;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import org.json.JSONObject;
 
 /**
@@ -34,6 +40,11 @@ public final class GameBridge {
     private LanNet lan;
     private AppUpdate upd;
     private String pendingSave;
+    private SnapshotManager snaps;
+    /** Gravação dos snapshots fora da thread do JavaScript (o JS chama a ponte de forma síncrona: disco lento travaria o jogo). */
+    private final ExecutorService io = Executors.newSingleThreadExecutor(new ThreadFactory() {
+        public Thread newThread(Runnable r) { Thread t = new Thread(r, "tetris-snapshot"); t.setDaemon(true); return t; }
+    });
 
     public GameBridge(Activity act, AppLifecycleManager life) {
         this.act = act;
@@ -52,6 +63,7 @@ public final class GameBridge {
         if (u != null) u.cancel();
         installer.unregister();
         pendingSave = null;
+        io.shutdown();      // termina a gravação pendente e não aceita mais
     }
 
     /** Executa JavaScript na página (se a tela ainda existir). */
@@ -77,6 +89,11 @@ public final class GameBridge {
     private synchronized AppUpdate upd() {
         if (upd == null) upd = new AppUpdate(new AppUpdate.Listener() { public void event(final String json) { js("Updater._ev(" + json + ")"); } }, AppUpdate.WEB, AppUpdate.API, "MissionBreak56/Tetris");
         return upd;
+    }
+
+    private synchronized SnapshotManager snaps() {
+        if (snaps == null) snaps = new SnapshotManager(new StorageManager(new File(act.getFilesDir(), "snapshots")), CryptoManager.available() ? new CryptoManager() : null);
+        return snaps;
     }
 
     private void netError(String msg) { js("Net._ev({\"e\":\"error\",\"msg\":" + LanNet.q(msg) + "})"); }
@@ -177,6 +194,24 @@ public final class GameBridge {
             return "{\"level\":" + pct + ",\"charging\":" + (plugged != 0) + ",\"saver\":" + saver + "}";
         } catch (Exception e) { return ""; }
     }
+
+    // ---------------------------------------------------------------- snapshots dos dados (fora do localStorage)
+    /** Guarda uma cópia consistente (texto JSON) em arquivo atômico cifrado com o Android Keystore. Assíncrono. */
+    @JavascriptInterface
+    public void snapshotSave(final String text) {
+        if (BridgeValidator.tooLong(text, BridgeValidator.MAX_SNAPSHOT_CHARS)) return;
+        try {
+            io.execute(new Runnable() { public void run() { snaps().save(text); } });
+        } catch (Exception ignored) { }     // pool já encerrado (tela destruída)
+    }
+
+    /** Último snapshot válido ou texto vazio. Só é chamado na inicialização quando o localStorage veio vazio. */
+    @JavascriptInterface
+    public String snapshotLoad() { String t = snaps().load(); return t == null ? "" : t; }
+
+    /** Sequência do snapshot mais novo (-1 se não há). */
+    @JavascriptInterface
+    public int snapshotSeq() { return (int) Math.min(Integer.MAX_VALUE, snaps().latestSeq()); }
 
     // ---------------------------------------------------------------- rede local (modo online)
     @JavascriptInterface

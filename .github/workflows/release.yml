@@ -40,6 +40,11 @@ jobs:
           mkdir -p /tmp/sec
           javac -encoding UTF-8 -d /tmp/sec app/src/main/java/com/missionbreak56/tetris/security/BridgeValidator.java tests/java/BridgeValidatorTest.java
           java -ea -cp /tmp/sec BridgeValidatorTest
+      - name: Testar o armazenamento nativo (integridade, gravação atômica, snapshots)
+        run: |
+          mkdir -p /tmp/stg
+          javac -encoding UTF-8 -d /tmp/stg app/src/main/java/com/missionbreak56/tetris/security/IntegrityManager.java app/src/main/java/com/missionbreak56/tetris/storage/*.java tests/java/StorageSnapshotTest.java
+          java -ea -cp /tmp/stg StorageSnapshotTest
 
   build:
     needs: test
