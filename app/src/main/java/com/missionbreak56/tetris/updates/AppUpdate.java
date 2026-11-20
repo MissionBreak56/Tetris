@@ -1,4 +1,6 @@
-package com.missionbreak56.tetris;
+package com.missionbreak56.tetris.updates;
+
+import com.missionbreak56.tetris.network.LanNet;
 
 import java.io.File;
 import java.io.FileOutputStream;

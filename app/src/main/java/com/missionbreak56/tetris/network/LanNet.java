@@ -1,4 +1,4 @@
-package com.missionbreak56.tetris;
+package com.missionbreak56.tetris.network;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

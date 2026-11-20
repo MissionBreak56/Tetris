@@ -1,4 +1,4 @@
-import com.missionbreak56.tetris.AppUpdate;
+import com.missionbreak56.tetris.updates.AppUpdate;
 import com.sun.net.httpserver.HttpServer;
 import java.io.File;
 import java.io.OutputStream;
