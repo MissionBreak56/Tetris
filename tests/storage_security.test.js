@@ -270,3 +270,13 @@ test('Interface: tela de backup protegido e importação de .tmb pedem senha, mo
   await new Promise((res) => setTimeout(res, 100)); await new Promise((res) => setImmediate(res));
   const rest = find(body, (c) => c.textContent === 'Restaurar (substitui tudo)')[0]; assert.ok(rest, 'mostrou a prévia e o botão de restaurar'); h.sb.openBackup(); assert.ok(find(h.els.sheetBody, (c) => /Backup protegido por senha/.test(c.textContent || '')).length >= 1, 'botão do backup protegido na tela de backup');
 });
+
+test('Interface: botão "Recuperar do snapshot" só aparece com snapshot disponível e restaura de verdade', () => {
+  const a = load(1, legacyStore()); a.run(mem()); a.get('SnapshotManager').create('manual', true); const snap = snapText(a);
+  const find = (n, f) => { const o = []; (function w(c) { if (f(c)) o.push(c); (c.children || []).forEach(w); })(n); return o; };
+  const none = load(1, legacyStore()); none.sb.openBackup(); assert.equal(find(none.els.sheetBody, (c) => /Recuperar do snapshot/.test(c.textContent || '')).length, 0, 'sem snapshot: sem botão');
+  const h = load(1); h.run(mem()); h.run('window.__snap.text = ' + JSON.stringify(snap)); h.sb.openBackup();
+  const bt = find(h.els.sheetBody, (c) => /Recuperar do snapshot/.test(c.textContent || ''))[0]; assert.ok(bt); bt.onclick();
+  const go = find(h.els.sheetBody, (c) => c.textContent === 'Restaurar este snapshot')[0]; assert.ok(go, 'mostra a tela do snapshot'); go.onclick(); h.els.confirmYes.onclick();
+  assert.equal(h.store.tetris_bestScore, '12345'); assert.equal(h.store.tetris_stats, legacyStore().tetris_stats);
+});

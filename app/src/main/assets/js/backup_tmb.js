@@ -175,3 +175,19 @@ function analyzeTmb(text, out, sum, password) {
     }), all ? 'danger' : ''));
   });
 }
+
+/** Snapshot automático do aparelho (fora da memória do jogo): mostra data e conteúdo e restaura se o usuário confirmar. */
+function openSnapshotRecover() {
+  Sheet.push('Snapshot do aparelho', (b) => {
+    const l = SnapshotManager.loadLatest(), out = h('div', { class: 'errs' });
+    if (!l.ok) { b.appendChild(h('div', { class: 'hint', text: l.errors.join(' · ') })); return; }
+    b.appendChild(h('div', { class: 'hint', text: 'O app guarda sozinho uma cópia dos seus dados fora da memória do jogo (cifrada no aparelho, não vai para a nuvem). Use só se perdeu dados.' }));
+    b.appendChild(kv('Criado em', fmtDate(l.snap.created)));
+    const pst = (() => { try { return JSON.parse(l.snap.data.global.profiles).list.map((x) => x.name).join(', '); } catch (e) { return '?'; } })();
+    b.appendChild(kv('Perfis', pst));
+    b.appendChild(btn('Restaurar este snapshot', () => Confirm.ask('Substituir TODOS os dados atuais pelo snapshot? Os dados atuais serão guardados para recuperação.', () => {
+      const r = Backup.restore(SnapshotManager.toBackupText(l.snap)); out.textContent = r.ok ? '✓ Snapshot restaurado' : r.errors.join(' · '); out.className = 'errs' + (r.ok ? ' ok' : '');
+    }), 'danger'));
+    b.appendChild(out);
+  });
+}

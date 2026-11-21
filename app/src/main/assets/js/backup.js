@@ -121,6 +121,7 @@ function openBackup() {
     b.appendChild(btn('Exportar: ver texto', () => Sheet.push('Texto do backup', (c) => { const t = text(), ta = h('textarea', { class: 'txt', rows: '8', readonly: 'readonly' }); ta.value = t; c.appendChild(h('div', { class: 'hint', text: Math.ceil(t.length / 1024) + ' KB' })); c.appendChild(ta); })));
     b.appendChild(btn('Importar backup…', openBackupImport));
     b.appendChild(btn('Backup protegido por senha (.tmb)…', openBackupTmb));
+    if (typeof SnapshotManager !== 'undefined' && SnapshotManager.available()) b.appendChild(btn('Recuperar do snapshot do aparelho…', openSnapshotRecover));
     if (Backup.hasPrev()) b.appendChild(btn('Recuperar estado anterior à última restauração', () => Confirm.ask('Restaurar o estado que existia antes da última restauração?', () => { const r = Backup.restorePrev(); out.textContent = r.ok ? '✓ Estado anterior recuperado' : r.errors.join(' · '); out.className = 'errs' + (r.ok ? ' ok' : ''); }), 'danger'));
     b.appendChild(out);
   });
