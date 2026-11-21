@@ -22,6 +22,9 @@ const EXTRA_THEMES = {
   8: { name: 'Grafite', pieces: { I: '#cfd8e8', J: '#6f8fe8', L: '#f0963a', O: '#f2e27a', S: '#7fd6a0', T: '#b07fe0', Z: '#e86a6a' } },
   9: { name: 'Floresta', pieces: { I: '#7fe3d0', J: '#5d90ff', L: '#ff9a3c', O: '#ffe45a', S: '#a6f05a', T: '#c38cff', Z: '#ff4a52' } },
   10: { name: 'Pôr do sol', pieces: { I: '#9fe6ff', J: '#7f9aff', L: '#ff8a3c', O: '#fff07a', S: '#8fe07a', T: '#ff6ab8', Z: '#ff4a4a' } },
+  // 12: tema livre (sem custo em estrelas) com paleta COMPLETA própria: 'full' substitui as cores derivadas (tabuleiro, grade, sombra e interface)
+  12: { name: 'Preto', pieces: { I: '#00ffd5', J: '#2f7bff', L: '#ff8c00', O: '#fff000', S: '#00ff44', T: '#e100ff', Z: '#ff1a1a' },
+    full: { board1: '#0a0a0a', board2: '#141414', grid: '#333333', ghost: '#ffffff', panel1: '#0e0e0e', panel2: '#060606', btn1: '#232323', btn2: '#181818', btnSmall: '#080808', ink: '#ffffff', dim: '#828282', val: '#ffd54a' } },
   11: { name: 'Gelo', pieces: { I: '#d6f1ff', J: '#6f9eff', L: '#ffa860', O: '#fff08a', S: '#7fe8b8', T: '#b493ff', Z: '#ff7a96' } },
 };
 const hexRgb = (hx) => { const n = parseInt(hx.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
@@ -37,7 +40,7 @@ const Theme = {
     const t = THEMES[i];
     if (EXTRA_THEMES[i]) {
       const x = EXTRA_THEMES[i];
-      return Object.assign({ id: i, name: x.name, bg1: t[0], bg2: t[1], acc: t[2], board1: '#000000', board2: mixHex(t[1], '#000000', 0.3), grid: rgbHex(t[3].split(',').map(Number)), ghost: t[2], pieces: Object.assign({}, x.pieces), builtin: true }, this.deriveUi(t[2]));
+      return Object.assign({ id: i, name: x.name, bg1: t[0], bg2: t[1], acc: t[2], board1: '#000000', board2: mixHex(t[1], '#000000', 0.3), grid: rgbHex(t[3].split(',').map(Number)), ghost: t[2], pieces: Object.assign({}, x.pieces), builtin: true }, this.deriveUi(t[2]), x.full || {});
     }
     return Object.assign({ id: i, name: ['Azul', 'Roxo', 'Verde', 'Laranja'][i] || 'Tema ' + (i + 1), bg1: t[0], bg2: t[1], acc: t[2], board1: '#000000', board2: '#020721', grid: rgbHex(t[3].split(',').map(Number)), ghost: '#2a86d6', pieces: Object.assign({}, DEFAULT_PIECES), builtin: true }, BUILTIN_UI[i] || BUILTIN_UI[0]);
   },

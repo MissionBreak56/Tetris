@@ -85,7 +85,7 @@ test('tema: duplicar tema embutido e editar; exportar/importar com validação',
 test('tema: botão THEME percorre embutidos e personalizados', () => {
   const h = load(1); const id = h.get('Theme').save(mk(h)).id;
   const seen = []; for (let i = 0; i < 6; i++) { h.els.bTheme.onclick(); seen.push(h.get('settings').theme); }
-  assert.deepEqual(seen, [1, 2, 3, id, 0, 1]);
+  assert.deepEqual(seen, [1, 2, 3, 12, id, 0], 'livres: 0–3, o Preto (12) e os personalizados; os 4–11 ficam bloqueados');
 });
 test('tema: telas de temas abrem', () => {
   const h = load(1); const id = h.get('Theme').save(mk(h)).id;

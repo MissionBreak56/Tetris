@@ -30,7 +30,7 @@ test('bloqueados nunca ficam ativos: seleção recusada, carregamento cai no pad
   assert.equal(h.run('selectTheme(5)'), false); assert.equal(S.theme, 0);
   const h2 = load(1, Object.assign({}, h.store, { tetris_index_bg: '6', tetris_skin: 'metal' })); assert.equal(h2.get('settings').theme, 0, 'tema bloqueado no armazenamento volta ao padrão'); assert.equal(h2.get('settings').skin, 'classic');
   give(h, 3); h.get('Rewards').unlock('theme:6'); assert.equal(h.run('selectTheme(6)'), true); assert.equal(S.theme, 6); assert.equal(load(1, h.store).get('settings').theme, 6);
-  const seen = []; for (let i = 0; i < 6; i++) { h.els.bTheme.onclick(); seen.push(S.theme); } assert.ok(!seen.some((t) => t >= 4 && t !== 6), 'só passa pelos liberados: ' + seen);
+  const seen = []; for (let i = 0; i < 6; i++) { h.els.bTheme.onclick(); seen.push(S.theme); } assert.ok(!seen.some((t) => t >= 4 && t !== 6 && t !== 12), 'só passa pelos liberados (o Preto, 12, é livre): ' + seen);
 });
 test('telas: Temas e Skins mostram saldo, cadeado e custo; desbloquear pela tela gasta e seleciona', () => {
   const h = load(1); give(h, 2); h.sb.openThemes(); const text = (c) => (c.textContent || '') + (c.children || []).map(text).join('|');

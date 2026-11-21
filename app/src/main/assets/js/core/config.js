@@ -19,7 +19,9 @@ const THEMES=[
  ['#4a4f5c','#08090c','#c9d1e0','170,180,200','60,66,80','20,22,28','#6b7385','#40465a'],
  ['#2b6a22','#050f04','#b7f36a','120,220,60','30,100,24','8,34,6','#46a038','#276820'],
  ['#c2461f','#1f0a14','#ffb07a','255,120,80','150,50,30','56,12,16','#e86a3a','#a83a22'],
- ['#3d7fb8','#04101c','#d6f1ff','140,200,255','40,100,150','8,32,52','#5fa4de','#35709f']];
+ ['#3d7fb8','#04101c','#d6f1ff','140,200,255','40,100,150','8,32,52','#5fa4de','#35709f'],
+ // 12: Preto (livre, sem custo em estrelas; paleta completa em themes.js: EXTRA_THEMES[12].full)
+ ['#1a1a1a','#000000','#404040','51,51,51','29,29,29','8,8,8','#232323','#181818']];
 const TH=()=>Theme.arr();
 function applyTheme(){ Theme.invalidate(); Theme.applyPieces(); const t=TH(), u=Theme.ui(), st=document.documentElement.style, rgb=(h)=>hexRgb(h).join(',');
   st.setProperty('--acc',t[2]); st.setProperty('--glow',t[3]); st.setProperty('--dk',t[4]);

@@ -539,10 +539,10 @@ test('config: lê valores salvos e grava com as mesmas chaves', () => {
   assert.equal(h.store.tetris_isShowGhost, '1');
   assert.equal(h.store.tetris_isVabiration, '1');
 });
-test('temas: os 4 temas originais continuam iguais (e os 8 novos existem)', () => {
+test('temas: os 4 temas originais continuam iguais (e os 8 por estrelas + o Preto existem)', () => {
   const h = load(1);
   const T = plain(h.get('THEMES'));
-  assert.equal(T.length, 12);
+  assert.equal(T.length, 13);
   assert.deepEqual(T.slice(0, 4).map((t) => [t[0], t[1]]), [['#2433b8', '#04051f'], ['#5a1fa8', '#12041f'], ['#12805a', '#031a14'], ['#b8601c', '#1f0d04']]);
   T.forEach((t) => t.slice(0, 3).forEach((c) => assert.match(c, /^#[0-9a-f]{6}$/i)));
 });
