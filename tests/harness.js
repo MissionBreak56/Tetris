@@ -75,7 +75,10 @@ function load(seed = 1, store = {}, opts = {}) {
       getItem: (k) => (k in h.store ? h.store[k] : null),
       setItem: (k, v) => { h.store[k] = String(v); },
       removeItem: (k) => { delete h.store[k]; },
+      key: (i) => Object.keys(h.store)[i] || null,
+      get length() { return Object.keys(h.store).length; },
     },
+    crypto: require('node:crypto').webcrypto,
     addEventListener: (t, f) => { (listeners[t] = listeners[t] || []).push(f); },
     requestAnimationFrame: () => 0,
     setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
@@ -83,6 +86,7 @@ function load(seed = 1, store = {}, opts = {}) {
     navigator: {},
     innerWidth: 411, innerHeight: 890, devicePixelRatio: 1,
   };
+  if (opts.globals) Object.assign(sandbox, opts.globals);      // ex.: { AndroidBridge } para testar a ponte nativa
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(seedSource(seed), sandbox);

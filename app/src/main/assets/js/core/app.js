@@ -50,6 +50,7 @@ function showMsg(t){ if(SIM) return; if(Versus.attachNote(t)) return; const m=$(
 function showMsg2(t){ if(SIM) return; if(Versus.attachNote(t)) return; const m=$('msg2'); m.textContent=t; m.className=/PERFECT/.test(t)?'m-perfect':''; restartAnim(m,'pop'); }
 
 /* ================= INIT ================= */
+try{ MigrationManager.boot(); }catch(e){}   // snapshots, recuperação e migração dos dados (antes de aplicar tema/configurações)
 applyTheme(); initBG(); resize(); addEventListener('resize',resize);
 refreshMenu(); requestAnimationFrame(loop);
 if(Profile.hasPin(Profile.cur())) Lock.show();      // perfil protegido: PIN antes de qualquer coisa

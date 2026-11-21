@@ -17,7 +17,7 @@ test('avatar: padrão por perfil, escolha persiste, valores inválidos ignorados
 test('PIN: só guarda hash de 4 dígitos, confere, bloqueia após 5 erros por 30 s e persiste', () => {
   const h = load(1), P = h.get('Profile'), id = P.list()[0].id; let t = 1e6; P.now = () => t;
   assert.equal(P.setPin(id, '12').ok, false); assert.equal(P.setPin(id, 'abcd').ok, false); assert.equal(P.setPin(id, '1234').ok, true);
-  const raw = JSON.stringify(plain(P.state)); assert.ok(!raw.includes('1234'), 'PIN em texto nunca é guardado'); assert.equal(P.hasPin(P.cur()), true); assert.match(P.cur().pin, /^[0-9a-f]{1,8}$/);
+  const raw = JSON.stringify(plain(P.state)); assert.ok(!raw.includes('1234'), 'PIN em texto nunca é guardado'); assert.equal(P.hasPin(P.cur()), true); assert.match(P.cur().pin, /^v2\$\d+\$[A-Za-z0-9+\/]{22}==\$[0-9a-f]{64}$/, 'PIN novo: PBKDF2 com sal próprio');
   assert.equal(P.tryPin(id, '1234').ok, true);
   for (let i = 1; i <= 4; i++) { const r = P.tryPin(id, '0000'); assert.equal(r.ok, false); assert.match(r.error, new RegExp('(' + (5 - i) + ' tentativas)')); }
   const r5 = P.tryPin(id, '0000'); assert.equal(r5.ok, false); assert.equal(r5.wait, true); assert.equal(P.tryPin(id, '1234').ok, false, 'bloqueado mesmo com o PIN certo'); assert.match(P.tryPin(id, '1234').error, /Aguarde \d+ s/);

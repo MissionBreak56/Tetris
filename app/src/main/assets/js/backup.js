@@ -71,10 +71,15 @@ const Backup = {
     return true;
   },
   /** Substitui TODOS os dados atuais pelo backup. Transacional: em qualquer falha, os dados anteriores são restaurados. */
-  restore(text) {
+  restore(text, opts) {
+    opts = opts || {};
     const p = this.parse(text); if (!p.ok) return p;                       // 1) validação total antes de tocar em qualquer coisa
     const snap = this.collect(), snapText = JSON.stringify({ type: 'tetris-backup', v: 1, app: 'tetris', engine: ENGINE_VERSION, created: Date.now(), sum: fnv(JSON.stringify(snap)), data: snap });
     const oldIds = Object.keys(snap.profiles), newData = p.backup.data;
+    // antes de tocar em qualquer coisa: snapshot DURÁVEL do estado atual (fora do localStorage) + marca "restauração em andamento".
+    // Se o app morrer no meio, na próxima abertura recoverInterrupted() volta ao estado anterior.
+    let marked = false;
+    if (!opts.recovery && typeof SnapshotManager !== 'undefined') { const pr = SnapshotManager.protect('pre-restore', snap); if (pr.durable) marked = Store.gsetVerified('restoring', JSON.stringify({ at: Date.now() })); }
     try {
       this._wipe(oldIds.concat(Object.keys(newData.profiles)));
       this._write(newData);
@@ -82,12 +87,25 @@ const Backup = {
     } catch (e) {                                                           // 2) rollback
       let ok = false;
       try { this._wipe(oldIds.concat(Object.keys(newData.profiles))); this._write(snap); ok = this._verify(snap); } catch (e2) { ok = false; }
+      if (marked && ok) Store.gdel('restoring');
       Profile.load(); try { reloadProfileData(); } catch (e3) {}
       return { ok: false, errors: [ok ? 'Falha ao gravar o backup (espaço insuficiente?). Seus dados anteriores foram mantidos.' : 'Falha grave ao restaurar. Use "Recuperar estado anterior" se disponível.'] };
     }
-    try { Store.gset('prevbackup', snapText); } catch (e) {}                 // cópia do estado anterior para recuperação manual
+    if (marked) Store.gdel('restoring');
+    if (!opts.recovery) { try { Store.gset('prevbackup', snapText); } catch (e) {} }                 // cópia do estado anterior para recuperação manual
     Profile.load(); try { reloadProfileData(); } catch (e) {}
     return { ok: true, errors: [], summary: p.summary };
+  },
+  /** Restauração interrompida (app fechado no meio)? Volta ao estado de antes dela usando o snapshot nativo. */
+  recoverInterrupted() {
+    if (Store.gget('restoring') == null) return { interrupted: false };
+    const res = { interrupted: true, recovered: false };
+    if (typeof SnapshotManager !== 'undefined' && SnapshotManager.available()) {
+      const l = SnapshotManager.loadLatest();
+      if (l.ok && l.snap.reason === 'pre-restore') { const r = this.restore(SnapshotManager.toBackupText(l.snap), { recovery: true }); res.recovered = !!r.ok; res.errors = r.errors; }
+    }
+    Store.gdel('restoring');
+    return res;
   },
   hasPrev() { return !!Store.gget('prevbackup'); },
   restorePrev() { const t = Store.gget('prevbackup'); if (!t) return { ok: false, errors: ['Nenhum estado anterior salvo'] }; return this.restore(t); },
@@ -102,6 +120,8 @@ function openBackup() {
     if (Native.available()) b.appendChild(btn('Exportar: compartilhar', () => Native.share('Backup do Tetris', text())));
     b.appendChild(btn('Exportar: ver texto', () => Sheet.push('Texto do backup', (c) => { const t = text(), ta = h('textarea', { class: 'txt', rows: '8', readonly: 'readonly' }); ta.value = t; c.appendChild(h('div', { class: 'hint', text: Math.ceil(t.length / 1024) + ' KB' })); c.appendChild(ta); })));
     b.appendChild(btn('Importar backup…', openBackupImport));
+    b.appendChild(btn('Backup protegido por senha (.tmb)…', openBackupTmb));
+    if (typeof SnapshotManager !== 'undefined' && SnapshotManager.available()) b.appendChild(btn('Recuperar do snapshot do aparelho…', openSnapshotRecover));
     if (Backup.hasPrev()) b.appendChild(btn('Recuperar estado anterior à última restauração', () => Confirm.ask('Restaurar o estado que existia antes da última restauração?', () => { const r = Backup.restorePrev(); out.textContent = r.ok ? '✓ Estado anterior recuperado' : r.errors.join(' · '); out.className = 'errs' + (r.ok ? ' ok' : ''); }), 'danger'));
     b.appendChild(out);
   });
@@ -111,7 +131,7 @@ function openBackupImport() {
     const ta = h('textarea', { class: 'txt', rows: '5', placeholder: 'Cole aqui o texto do backup' }), out = h('div', { class: 'errs' }), sum = h('div', {});
     let pending = null;
     const analyze = (t) => {
-      clearEl(sum); pending = null; const p = Backup.parse(t);
+      clearEl(sum); pending = null; if (BackupManager.isTmb(t)) { analyzeTmb(t, out, sum); return; } const p = Backup.parse(t);
       if (!p.ok) { out.textContent = p.errors.join(' · '); out.className = 'errs'; return; }
       pending = t; out.textContent = '✓ Backup válido'; out.className = 'errs ok';
       sum.appendChild(kv('Criado em', fmtDate(p.summary.created)));

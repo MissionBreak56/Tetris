@@ -1,4 +1,4 @@
-import com.missionbreak56.tetris.LanNet;
+import com.missionbreak56.tetris.network.LanNet;
 import java.net.InetAddress;
 import java.util.*;
 import java.util.concurrent.*;

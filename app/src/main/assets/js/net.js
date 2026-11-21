@@ -33,7 +33,7 @@ const Net = {
   connected() { return ['handshake', 'lobby', 'playing', 'reconnecting', 'ended'].includes(this.st); },
   validIp(ip) { const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(String(ip).trim()); return !!m && m.slice(1).every((x) => +x <= 255) && PRIVATE_NET.test(String(ip).trim()); },
   stopTimer() { if (this.timer) { clearInterval(this.timer); this.timer = null; } },
-  reset() { this.pzClear(); this.stopTimer(); this.ready = false; this.peerReady = false; this.sid = ''; this.txSeq = 0; this.rxSeq = -1; this.peerAck = -1; this.msgLog = []; this.rcBusy = false; this.beatAt = 0; this.role = null; this.peer = null; this.hosts = []; this.ip = ''; this.ips = []; this.rtts = []; this.err = ''; this.st = 'idle'; },
+  reset() { this._limReset(); this.pzClear(); this.stopTimer(); this.ready = false; this.peerReady = false; this.sid = ''; this.txSeq = 0; this.rxSeq = -1; this.peerAck = -1; this.msgLog = []; this.rcBusy = false; this.beatAt = 0; this.role = null; this.peer = null; this.hosts = []; this.ip = ''; this.ips = []; this.rtts = []; this.err = ''; this.st = 'idle'; },
   /** Encerra tudo: avisa o outro lado (se conectado) e fecha o socket. */
   disconnect() {
     if (this.connected()) this.send({ k: 'bye' });
@@ -80,11 +80,46 @@ const Net = {
         this.stopTimer(); this.setSt('error', String(e.msg || 'Erro de rede')); break;
     }
   },
+  /* ---- limites de tráfego do oponente: inundação (token bucket) e mensagens malformadas (strikes numa janela) ---- */
+  RATE_CAP: 400, RATE_PER_S: 200, FLOOD_MS: 2000, FLOOD_DROPS: 300, BAD_MAX: 20, BAD_WINDOW_MS: 10000,
+  lim: { tokens: 400, at: 0, dropAt: 0, drops: 0, bad: [] },
+  _limReset() { this.lim = { tokens: this.RATE_CAP, at: 0, dropAt: 0, drops: 0, bad: [] }; },
+  /** true = mensagem admitida. O tráfego normal (≈ 120 msg/s no máximo) fica muito abaixo de 200/s com rajada de 400. */
+  _admit(t) {
+    const L = this.lim; if (!L.at || t < L.at) L.at = t;
+    L.tokens = Math.min(this.RATE_CAP, L.tokens + (t - L.at) * this.RATE_PER_S / 1000); L.at = t;
+    if (L.tokens >= 1) { L.tokens -= 1; return true; }
+    if (!L.dropAt || t - L.dropAt > this.FLOOD_MS) { L.dropAt = t; L.drops = 0; }          // janela de descartes
+    L.drops++;
+    return false;
+  },
+  /** Conta uma mensagem inválida; passou do limite na janela => desconecta. */
+  _bad(t) {
+    const L = this.lim; L.bad.push(t); while (L.bad.length && t - L.bad[0] > this.BAD_WINDOW_MS) L.bad.shift();
+    if (L.bad.length > this.BAD_MAX) this.disconnectKeep('O oponente enviou mensagens inválidas demais');
+  },
+  /** Formato mínimo de cada tipo conhecido. Tipos desconhecidos passam (compatibilidade com versões futuras) e são ignorados adiante. */
+  _valid(m) {
+    const str = (v, n) => v == null || (typeof v === 'string' && v.length <= n);
+    switch (m.k) {
+      case 'nack': return str(m.why, 200);
+      case 'p': case 'pong': return typeof m.t === 'number' && Number.isFinite(m.t);
+      // 'in' (ações da partida) é validado em onIn/Versus.netRecv: uma ação inválida ABORTA a partida (resposta mais forte que só contar)
+      case 'rs': return Number.isInteger(m.a) && m.a >= 0;
+      case 'h': return Number.isInteger(m.t) && typeof m.h === 'string' && m.h.length <= 16;
+      case 'pz': return typeof m.t === 'string' && m.t.length <= 8 && str(m.s, 8) && (m.r == null || typeof m.r === 'boolean');
+      case 'start': return typeof m.sid === 'string' && m.sid.length <= 64;
+      default: return true;
+    }
+  },
   _line(s) {
-    if (typeof s !== 'string' || s.length > this.MAX_LINE) return;
-    let m; try { m = JSON.parse(s); } catch (e) { return; }
-    if (!m || typeof m !== 'object' || Array.isArray(m) || typeof m.k !== 'string') return;
-    this.lastRx = this.now();
+    const t = this.now();
+    if (!this._admit(t)) { if (this.lim.drops > this.FLOOD_DROPS) this.disconnectKeep('O oponente enviou mensagens demais'); return; }   // alguns descartes são tolerados; centenas na janela = inundação
+    if (typeof s !== 'string' || s.length > this.MAX_LINE) { this._bad(t); return; }
+    let m; try { m = JSON.parse(s); } catch (e) { this._bad(t); return; }
+    if (!m || typeof m !== 'object' || Array.isArray(m) || typeof m.k !== 'string') { this._bad(t); return; }
+    if (!this._valid(m)) { this._bad(t); return; }
+    this.lastRx = t;
     if (m.k === 'hello') return this.onHello(m);
     if (m.k === 'nack') { this.disconnectKeep(String(m.why || 'Recusado pelo oponente').slice(0, 80)); return; }
     if (m.k === 'bye') return this.onClosed('O oponente saiu', true);

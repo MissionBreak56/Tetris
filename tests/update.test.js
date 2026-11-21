@@ -77,9 +77,10 @@ test('tela inicial: mostra a versão instalada junto de "Developed by T. Marques
 });
 test('Android: permissão de instalação, métodos nativos e passos do CI presentes', () => {
   const man = fs.readFileSync(path.join(ROOT, 'AndroidManifest.xml'), 'utf8'); assert.match(man, /REQUEST_INSTALL_PACKAGES/); assert.match(man, /android\.permission\.INTERNET/);
-  const j = fs.readFileSync(path.join(ROOT, 'java/com/missionbreak56/tetris/MainActivity.java'), 'utf8');
+  const J = (f) => fs.readFileSync(path.join(ROOT, 'java/com/missionbreak56/tetris', f), 'utf8');
+  const j = ['MainActivity.java', 'core/GameBridge.java', 'updates/UpdateInstaller.java'].map(J).join('\n');   // a ponte e o instalador foram separados da MainActivity
   for (const s of ['public String version()', 'public void updateCheck()', 'public void updateDownload(String tag)', 'public void updateCancel()', 'public void updateInstall()', 'PackageInstaller', 'canRequestPackageInstalls', 'ACTION_MANAGE_UNKNOWN_APP_SOURCES', 'RECEIVER_NOT_EXPORTED', 'STATUS_PENDING_USER_ACTION']) assert.ok(j.includes(s), s);
-  assert.ok(fs.existsSync(path.join(ROOT, 'java/com/missionbreak56/tetris/AppUpdate.java'))); assert.ok(fs.existsSync(path.join(__dirname, 'java', 'AppUpdateTest.java')));
+  assert.ok(fs.existsSync(path.join(ROOT, 'java/com/missionbreak56/tetris/updates/AppUpdate.java'))); assert.ok(fs.existsSync(path.join(__dirname, 'java', 'AppUpdateTest.java')));
   const wf = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'release.yml'), 'utf8'); assert.match(wf, /AppUpdateTest/);
-  const up = fs.readFileSync(path.join(ROOT, 'java/com/missionbreak56/tetris/AppUpdate.java'), 'utf8'); assert.match(up, /releases\/latest/); assert.match(up, /\^v\\\\d\+\\\\\.\\\\d\+\\\\\.\\\\d\+\$/);
+  const up = fs.readFileSync(path.join(ROOT, 'java/com/missionbreak56/tetris/updates/AppUpdate.java'), 'utf8'); assert.match(up, /releases\/latest/); assert.match(up, /\^v\\\\d\+\\\\\.\\\\d\+\\\\\.\\\\d\+\$/);
 });

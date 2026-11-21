@@ -866,3 +866,46 @@ test('fuzz da pausa online: pedidos, aceites, recusas e "continuar" em momentos 
   }
   assert.ok(pauses >= 8, 'o fuzz realmente pausou várias vezes: ' + pauses);
 });
+
+/* ---------------- segurança do protocolo LAN: inundação, mensagens malformadas ---------------- */
+test('LAN: inundação de mensagens é descartada (limite por segundo) e, se persistir, desconecta o oponente', () => {
+  const P = startMatch(pair({ lat: 0 })); const n = NetOf(P.A); let t = 1e6; n.now = () => t; n.lastRx = t; n.beatAt = t; n._limReset();
+  let pongs = 0; const real = n.onPong.bind(n); n.onPong = (m) => { pongs++; return real(m); };
+  for (let i = 0; i < n.RATE_CAP + 50; i++) n._line('{"k":"pong","t":' + t + '}');
+  assert.equal(pongs, n.RATE_CAP, 'só passa a rajada máxima (' + n.RATE_CAP + '); o resto é descartado'); assert.equal(n.st, 'playing', 'uma rajada curta não derruba a conexão');
+  for (let s = 0; s < 4 && n.st === 'playing'; s++) { t += 500; for (let i = 0; i < 3000 && n.st === 'playing'; i++) n._line('{"k":"pong","t":' + t + '}'); }
+  assert.equal(n.st, 'error', 'inundação sustentada desconecta'); assert.match(String(n.err || n.errMsg || n.msg || n.stMsg || n.detail || JSON.stringify(n.status || '') + h_(n)), /mensagens demais/);
+});
+const h_ = (n) => { try { return JSON.stringify(Object.values(n).filter((v) => typeof v === 'string')); } catch (e) { return ''; } };
+test('LAN: tráfego normal (60 msgs/s por 30 s, com mensagens de jogo) nunca é limitado', () => {
+  const P = startMatch(pair({ lat: 1 })); const n = NetOf(P.A); let t = 2e6; n.now = () => t; n._limReset(); let admitted = 0, total = 0;
+  for (let s = 0; s < 30; s++) for (let i = 0; i < 60; i++) { t += 1000 / 60; total++; if (n._admit(t)) admitted++; }
+  assert.equal(admitted, total); assert.equal(n.lim.drops, 0);
+  for (let i = 0; i < 150; i++) { t += 5; total++; if (n._admit(t)) admitted++; }   // pico de 200/s por um instante
+  assert.equal(admitted, total, 'um pico de 200 msg/s ainda cabe');
+});
+test('LAN: mensagens malformadas são contadas numa janela; passou de 20 desconecta, espaçadas não', () => {
+  const junk = ['', 'x', '[]', '5', 'null', '{"k":5}', '{"k":"p","t":"x"}', '{"k":"rs","a":-1}', '{"k":"h","t":1,"h":"x".repeat}', '{"k":"pz","t":5}', '{"k":"pong"}', 'x'.repeat(20000), '{"k":"nack","why":{}}'];
+  const P = startMatch(pair({ lat: 0 })); const n = NetOf(P.A); let t = 3e6; n.now = () => t; n.lastRx = t; n.beatAt = t; n._limReset();
+  for (let i = 0; i < 20; i++) { t += 10; n._line(junk[i % junk.length]); } assert.equal(n.st, 'playing', '20 inválidas ainda é tolerado');
+  t += 11000; for (let i = 0; i < 20; i++) { t += 10; n._line(junk[i % junk.length]); } assert.equal(n.st, 'playing', 'janela de 10 s: as antigas expiraram');
+  for (let i = 0; i < 3; i++) { t += 10; n._line(junk[i % junk.length]); } assert.equal(n.st, 'error', 'mais de 20 na janela: desconecta'); assert.match(String(n.errMsg || n.err || n.msg || ''), /inválidas demais|demais/);
+  const Q = startMatch(pair({ lat: 0 })); const m = NetOf(Q.A); let u = 5e6; m.now = () => u; m.lastRx = u; m.beatAt = u; m._limReset();
+  for (let i = 0; i < 100; i++) { u += 1500; m._line(junk[i % junk.length]); }                // uma a cada 1,5 s: nunca passa de 20 na janela
+  assert.equal(m.st, 'playing', 'inválidas espaçadas não derrubam');
+});
+test('LAN: tipos de mensagem desconhecidos (versões futuras) são ignorados sem contar como lixo', () => {
+  const P = startMatch(pair({ lat: 0 })); const n = NetOf(P.A); let t = 4e6; n.now = () => t; n.lastRx = t; n.beatAt = t; n._limReset();
+  for (let i = 0; i < 100; i++) { t += 100; n._line(JSON.stringify({ k: 'novo-tipo-' + i, x: 1 })); }
+  assert.equal(n.st, 'playing'); assert.equal(n.lim.bad.length, 0);
+});
+test('LAN: o limite zera ao conectar de novo (um oponente ruim não prejudica a próxima partida)', () => {
+  const P = pair({ lat: 0 }); const n = NetOf(P.A); n.lim.tokens = 0; n.lim.bad = [1, 2, 3]; n.reset();
+  assert.equal(n.lim.tokens, n.RATE_CAP); assert.equal(n.lim.bad.length, 0); assert.equal(n.lim.drops, 0);
+});
+test('LAN: mensagem duplicada ou fora de ordem da partida não é aplicada duas vezes', () => {
+  const P = startMatch(pair({ lat: 0 })); P.tick(30); const n = NetOf(P.A), rx0 = n.rxSeq;
+  const msg = JSON.stringify({ k: 'in', s: rx0 + 1, a: -1, u: 20, e: [] });
+  n._line(msg); assert.equal(n.rxSeq, rx0 + 1); n._line(msg); n._line(msg); assert.equal(n.rxSeq, rx0 + 1, 'duplicatas ignoradas');
+  n._line(JSON.stringify({ k: 'in', s: rx0 + 5, u: 21, e: [] })); assert.equal(n.rxSeq, rx0 + 1, 'salto de sequência não é aceito (pede reenvio)');
+});
