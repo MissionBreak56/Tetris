@@ -11,6 +11,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import com.missionbreak56.tetris.security.NavigationPolicy;
 import java.io.ByteArrayInputStream;
 
 /**
@@ -20,17 +21,14 @@ import java.io.ByteArrayInputStream;
  */
 public final class WebViewConfigurator {
     public static final String HOME = "file:///android_asset/index.html";
-    private static final String ASSET_PREFIX = "file:///android_asset/";
 
     private WebViewConfigurator() { }
 
     /** Navegação de página (quadro principal ou subquadro): só os arquivos do próprio app. */
-    public static boolean isAllowedPage(String url) { return url != null && url.startsWith(ASSET_PREFIX); }
+    public static boolean isAllowedPage(String url) { return NavigationPolicy.isAllowedPage(url); }
 
     /** Recursos carregados pela página: arquivos do app mais data:/blob:/about:blank (locais, sem rede). */
-    public static boolean isAllowedResource(String url) {
-        return isAllowedPage(url) || (url != null && (url.startsWith("data:") || url.startsWith("blob:") || url.equals("about:blank")));
-    }
+    public static boolean isAllowedResource(String url) { return NavigationPolicy.isAllowedResource(url); }
 
     @SuppressLint({ "SetJavaScriptEnabled", "AddJavascriptInterface" })
     public static void configure(WebView web, Object bridge, String bridgeName, Runnable onRendererGone) {
