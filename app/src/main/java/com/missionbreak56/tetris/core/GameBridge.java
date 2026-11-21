@@ -19,9 +19,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import org.json.JSONObject;
 
 /**
@@ -203,6 +206,16 @@ public final class GameBridge {
         try {
             io.execute(new Runnable() { public void run() { snaps().save(text); } });
         } catch (Exception ignored) { }     // pool já encerrado (tela destruída)
+    }
+
+    /** Igual a snapshotSave, mas espera a gravação terminar e confirma (usado antes de operações arriscadas: restauração e migração). */
+    @JavascriptInterface
+    public boolean snapshotSaveNow(final String text) {
+        if (BridgeValidator.tooLong(text, BridgeValidator.MAX_SNAPSHOT_CHARS)) return false;
+        try {
+            Future<Boolean> f = io.submit(new Callable<Boolean>() { public Boolean call() { return snaps().save(text); } });
+            return f.get(20, TimeUnit.SECONDS);
+        } catch (Exception e) { return false; }
     }
 
     /** Último snapshot válido ou texto vazio. Só é chamado na inicialização quando o localStorage veio vazio. */
