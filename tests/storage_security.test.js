@@ -132,3 +132,141 @@ test('Migração que perde dado é recusada pelo verify e desfeita', () => {
   h.run("localStorage.setItem('tetris__schema', JSON.stringify({v:1,log:[],tries:0,pending:null})); MigrationManager.steps[1].run = function(){ localStorage.removeItem('tetris_history'); };");
   const r = M.run(); assert.equal(r.ok, false); assert.equal(r.rolledBack, true); assert.equal(h.store.tetris_history, '[]', 'a chave apagada voltou');
 });
+
+/* ---------------- Snapshots ---------------- */
+test('Snapshot: cria, valida (soma) e recusa snapshot alterado/inválido', () => {
+  const h = load(1, legacyStore()); h.run(mem()); const S = h.get('SnapshotManager');
+  assert.equal(S.available(), true); assert.equal(S.create('teste', false).ok, true); assert.equal(h.run('window.__snap.async'), 1);
+  const t = snapText(h), v = S.verify(t); assert.equal(v.ok, true); assert.equal(v.snap.reason, 'teste'); assert.equal(v.snap.data.global.profiles.includes('p1'), true);
+  const o = JSON.parse(t); o.data.profiles.p1.bestScore = '999999'; assert.equal(S.verify(JSON.stringify(o)).ok, false, 'dados alterados: soma não confere');
+  for (const bad of ['', 'x', '{}', JSON.stringify({ type: 'outro' }), JSON.stringify({ type: 'tetris-snapshot', v: 9, app: 'tetris' }), null]) assert.equal(S.verify(bad).ok, false);
+  assert.equal(S.protect('pre-x').durable, true); assert.equal(h.run('window.__snap.sync'), 1, 'protect usa gravação confirmada (síncrona)');
+  h.run('SnapshotManager.backend.saveNow = function(){ return false; }'); assert.equal(S.protect('pre-y').durable, false, 'gravação recusada não vira "durável"');
+});
+test('Snapshot: sem ponte nativa nem backend o app funciona normalmente (sem snapshot)', () => {
+  const h = load(1, legacyStore()), S = h.get('SnapshotManager'); assert.equal(S.available(), false); assert.equal(S.create('x').ok, false); assert.equal(S.recoverIfEmpty().recovered, false); assert.equal(S.protect('x').durable, false);
+  assert.equal(h.get('Backup').restore(h.get('Backup').text()).ok, true, 'restaurar continua funcionando sem snapshot');
+});
+test('Snapshot: dados sumiram (localStorage limpo) => recupera do snapshot; com dados presentes NÃO mexe', () => {
+  const h = load(1, legacyStore()); h.run(mem()); h.get('SnapshotManager').create('antes', true);
+  const snap = snapText(h);
+  const present = load(1, legacyStore()); present.run(mem()); present.run('window.__snap.text = ' + JSON.stringify(snap)); present.store.tetris_bestScore = '1'; present.run("localStorage.setItem('tetris_stats','{\"all\":{\"games\":99}}')");
+  assert.equal(present.get('SnapshotManager').recoverIfEmpty().recovered, false, 'há dados: não sobrescreve'); assert.equal(present.store.tetris_bestScore, '1');
+  const wiped = load(1); wiped.run(mem()); wiped.run('window.__snap.text = ' + JSON.stringify(snap));
+  assert.equal(wiped.get('SnapshotManager').storageEmpty(), true); const r = wiped.get('SnapshotManager').recoverIfEmpty(); assert.equal(r.recovered, true);
+  assert.equal(wiped.store.tetris_bestScore, '12345'); assert.equal(wiped.store.tetris_stats, legacyStore().tetris_stats); assert.equal(wiped.get('Profile').list()[0].id, 'p1');
+  const bad = load(1); bad.run(mem()); bad.run("window.__snap.text = '{\"type\":\"tetris-snapshot\"}'"); assert.equal(bad.get('SnapshotManager').recoverIfEmpty().recovered, false, 'snapshot inválido não restaura lixo');
+});
+test('Restauração: antes de tocar em nada o estado atual vira snapshot DURÁVEL e a marca "restaurando" é removida no fim', () => {
+  const a = load(1, legacyStore()), txt = a.get('Backup').text();
+  const h = load(1); h.run(mem()); h.store.tetris_bestScore = '555'; const r = h.get('Backup').restore(txt); assert.equal(r.ok, true);
+  assert.equal(h.run('window.__snap.sync'), 1); const v = h.get('SnapshotManager').verify(snapText(h)); assert.equal(v.snap.reason, 'pre-restore'); assert.equal(v.snap.data.profiles.p1.bestScore, '555', 'o snapshot guarda o estado de ANTES');
+  assert.equal(h.store['tetris__restoring'], undefined, 'marca removida'); assert.equal(h.store.tetris_bestScore, '12345');
+});
+test('Restauração interrompida (app morreu no meio): na próxima abertura volta ao estado de antes', () => {
+  const orig = Object.assign(legacyStore(), { tetris_bestScore: '4242' }), a = load(1, orig); a.run(mem()); a.get('SnapshotManager').protect('pre-restore');   // snapshot durável do estado bom
+  const snap = snapText(a);
+  const b = load(1); b.run(mem()); b.run('window.__snap.text = ' + JSON.stringify(snap));
+  b.store.tetris_bestScore = 'METADE'; delete b.store.tetris_stats; b.store['tetris__restoring'] = JSON.stringify({ at: 1 }); b.store['tetris__profiles'] = '{"list":[';   // meio da gravação
+  const r = b.get('Backup').recoverInterrupted(); assert.equal(r.interrupted, true); assert.equal(r.recovered, true);
+  assert.equal(b.store.tetris_bestScore, '4242'); assert.equal(b.store.tetris_stats, orig.tetris_stats); assert.equal(b.store['tetris__restoring'], undefined); assert.equal(b.get('Profile').list()[0].id, 'p1');
+  assert.equal(b.get('Backup').recoverInterrupted().interrupted, false, 'só uma vez');
+  const c = load(1); c.run(mem()); c.run('window.__snap.text = ' + JSON.stringify(a.get('SnapshotManager').build('outro', null))); c.store['tetris__restoring'] = '{"at":1}'; c.store.tetris_bestScore = 'X';
+  const r2 = c.get('Backup').recoverInterrupted(); assert.equal(r2.recovered, false, 'snapshot de outro motivo não é usado'); assert.equal(c.store.tetris_bestScore, 'X'); assert.equal(c.store['tetris__restoring'], undefined, 'marca limpa (sem laço)');
+});
+test('Restauração: se a gravação falha no meio, os dados anteriores voltam (rollback) e nada fica marcado', () => {
+  const src = load(1, Object.assign(legacyStore(), { tetris_bestScore: '7777' })), txt = src.get('Backup').text();
+  const h = load(1, Object.assign(legacyStore(), { tetris_bestScore: '1111' })); h.run(mem()); const before = h.store.tetris_bestScore;
+  h.run("(function(){ var real = localStorage.setItem, n = 0; localStorage.setItem = function(k, v){ if (k === 'tetris_bestScore' && String(v) === '7777') throw new Error('QuotaExceededError'); return real(k, v); }; })()");
+  const r = h.get('Backup').restore(txt); assert.equal(r.ok, false); assert.match(r.errors[0], /dados anteriores foram mantidos/); assert.equal(h.store.tetris_bestScore, before); assert.equal(h.store['tetris__restoring'], undefined);
+});
+
+/* ---------------- Backup .tmb ---------------- */
+const slow = { iter: 100000 };
+test('TMB sem senha: ida e volta, checksum, e o arquivo NÃO é sigiloso (documentado)', async () => {
+  const h = load(1, legacyStore()), B = h.get('BackupManager'), R = h.get('RestoreManager');
+  const r = await B.create({}); assert.equal(r.ok, true); assert.equal(r.encrypted, false); const o = JSON.parse(r.text);
+  assert.equal(o.format, 'TMB'); assert.equal(o.fv, 2); assert.equal(o.app, 'tetris'); assert.equal(o.scope, 'all'); assert.equal(o.enc, null); assert.match(o.sha256, /^[0-9a-f]{64}$/); assert.equal(typeof o.created, 'number'); assert.equal(typeof o.engine, 'string');
+  assert.equal(Buffer.from(o.body, 'base64').toString().includes('12345'), true, 'sem senha o conteúdo é legível');
+  assert.equal(B.isTmb(r.text), true); assert.equal(B.isTmb('{"type":"tetris-backup"}'), false);
+  const p = await R.parse(r.text); assert.equal(p.ok, true); assert.equal(p.summary.tmb.encrypted, false); assert.equal(p.summary.profiles[0].games, 7);
+  const h2 = load(1), res = await h2.get('RestoreManager').restore(r.text); assert.equal(res.ok, true); assert.equal(h2.store.tetris_bestScore, '12345'); assert.equal(h2.store.tetris_stats, legacyStore().tetris_stats);
+});
+test('TMB com senha: AES-256-GCM/PBKDF2, restaura em OUTRO aparelho só com a senha certa', async () => {
+  const h = load(1, legacyStore()), B = h.get('BackupManager'), R = h.get('RestoreManager');
+  const r = await B.create(Object.assign({ password: 'senha forte 123' }, slow)); assert.equal(r.ok, true); assert.equal(r.encrypted, true); const o = JSON.parse(r.text);
+  assert.deepEqual({ a: o.enc.alg, k: o.enc.kdf, i: o.enc.iter }, { a: 'AES-256-GCM', k: 'PBKDF2-HMAC-SHA256', i: 100000 }); assert.equal(Buffer.from(o.enc.salt, 'base64').length, 16); assert.equal(Buffer.from(o.enc.iv, 'base64').length, 12);
+  assert.equal(r.text.includes('12345'), false); assert.equal(Buffer.from(o.body, 'base64').toString('latin1').includes('bestScore'), false, 'conteúdo cifrado');
+  assert.equal(r.text.includes('senha forte'), false, 'a senha nunca vai no arquivo');
+  const noPw = await R.parse(r.text); assert.equal(noPw.ok, false); assert.equal(noPw.needsPassword, true);
+  for (const wrong of ['senha forte 124', 'x', 'SENHA FORTE 123', ' senha forte 123']) { const w = await R.parse(r.text, wrong); assert.equal(w.ok, false); assert.equal(w.wrongPassword, true, wrong); }
+  const ok = await R.parse(r.text, 'senha forte 123'); assert.equal(ok.ok, true); assert.equal(ok.summary.tmb.encrypted, true);
+  const other = load(1, { tetris_bestScore: '1' }); const res = await other.get('RestoreManager').restore(r.text, 'senha forte 123'); assert.equal(res.ok, true);
+  assert.equal(other.store.tetris_bestScore, '12345', 'outro aparelho restaurou'); const bad = load(1, { tetris_bestScore: '1' }); const rb = await bad.get('RestoreManager').restore(r.text, 'errada!!'); assert.equal(rb.ok, false); assert.equal(bad.store.tetris_bestScore, '1', 'senha errada não toca em nada');
+});
+test('TMB: nonce/sal novos a cada backup (nunca reutiliza) e senha curta/longa é recusada', async () => {
+  const h = load(1, legacyStore()), B = h.get('BackupManager'); const seen = new Set();
+  for (let i = 0; i < 6; i++) { const o = JSON.parse((await B.create(Object.assign({ password: 'mesma senha 1' }, slow))).text); seen.add(o.enc.iv); seen.add(o.enc.salt); seen.add(o.body); }
+  assert.equal(seen.size, 18, 'iv, salt e texto cifrado diferentes em todos');
+  assert.equal((await B.create({ password: 'curta' })).ok, false); assert.equal((await B.create({ password: 'x'.repeat(129) })).ok, false); assert.equal((await B.create({ password: '12345678' })).ok, true);
+  const cc = JSON.parse((await B.create({ password: 'senha com acentuação ç' })).text); assert.equal(cc.enc.iter, 600000, 'padrão: 600.000 iterações');
+});
+test('TMB: arquivo corrompido, truncado, adulterado ou com parâmetros perigosos é recusado', async () => {
+  const h = load(1, legacyStore()), B = h.get('BackupManager'), R = h.get('RestoreManager');
+  const enc = JSON.parse((await B.create(Object.assign({ password: 'senha forte 123' }, slow))).text), pl = JSON.parse((await B.create({})).text);
+  const sha = (o, h2) => nc.createHash('sha256').update(Buffer.concat([Buffer.from(aad(o)), Buffer.from(o.body, 'base64')])).digest('hex');
+  const aad = (o) => ['TMB', o.fv, o.app, o.appVersion, o.engine, o.created, o.scope, o.enc ? [o.enc.alg, o.enc.kdf, o.enc.iter, o.enc.salt, o.enc.iv].join(':') : '-'].join('|');
+  const bad = async (o, re, pw) => { const r = await R.parse(typeof o === 'string' ? o : JSON.stringify(o), pw); assert.equal(r.ok, false, String(re)); assert.match(r.errors[0], re); return r; };
+  await bad('', /Nada/); await bad('lixo', /JSON/); await bad('{"a":1}', /\.tmb/); await bad(JSON.stringify(pl).slice(0, 200), /JSON/); await bad(JSON.stringify(pl).slice(0, -5), /JSON/);
+  await bad(Object.assign({}, pl, { body: pl.body.slice(0, -8) + 'AAAAAAAA' }), /checksum/); await bad(Object.assign({}, pl, { body: pl.body.slice(4) }), /checksum|inválido/); await bad(Object.assign({}, pl, { created: pl.created + 1 }), /checksum/);
+  await bad(Object.assign({}, pl, { fv: 3 }), /mais nova/); await bad(Object.assign({}, pl, { fv: 0 }), /inválida/); await bad(Object.assign({}, pl, { app: 'outro' }), /Tetris/); await bad(Object.assign({}, pl, { scope: 'tudo' }), /inválido/); await bad(Object.assign({}, pl, { sha256: 'zz' }), /checksum|incompleto/);
+  await bad(Object.assign({}, pl, { appVersion: 'a b<script>' }), /inválido/); await bad(Object.assign({}, pl, { body: 5 }), /incompleto/);
+  for (const iter of [10, 99999, 3000001, 1e12, 2.5, '600000']) { const e = JSON.parse(JSON.stringify(enc)); e.enc.iter = iter; e.sha256 = sha(e); await bad(e, /criptografia inválidos/, 'senha forte 123'); }
+  for (const patch of [{ alg: 'AES-128-CBC' }, { kdf: 'PBKDF2-HMAC-SHA1' }, { salt: 'AAAA' }, { iv: 'AAAA' }, { salt: '@@@' }]) { const e = JSON.parse(JSON.stringify(enc)); Object.assign(e.enc, patch); e.sha256 = sha(e); await bad(e, /criptografia inválidos/, 'senha forte 123'); }
+  // atacante troca o cabeçalho E recalcula o checksum: o GCM (cabeçalho autenticado) ainda recusa
+  const e2 = JSON.parse(JSON.stringify(enc)); e2.created += 5; e2.sha256 = sha(e2); await bad(e2, /Senha incorreta ou arquivo alterado/, 'senha forte 123');
+  const e3 = JSON.parse(JSON.stringify(enc)); e3.scope = 'profile'; e3.sha256 = sha(e3); await bad(e3, /Senha incorreta ou arquivo alterado/, 'senha forte 123');
+  const e4 = JSON.parse(JSON.stringify(enc)); const raw = Buffer.from(e4.body, 'base64'); raw[3] ^= 1; e4.body = raw.toString('base64'); e4.sha256 = sha(e4); await bad(e4, /Senha incorreta ou arquivo alterado/, 'senha forte 123');
+  const big = JSON.stringify(Object.assign({}, pl, { body: 'A'.repeat(9100000) })); await bad(big, /grande/);
+});
+test('TMB sem senha com conteúdo adulterado mas checksum recalculado ainda passa pelo validador dos dados', async () => {
+  const h = load(1, legacyStore()), B = h.get('BackupManager'), R = h.get('RestoreManager'), pl = JSON.parse((await B.create({})).text);
+  const body = JSON.parse(Buffer.from(pl.body, 'base64').toString()); body.data.profiles.p1.bestScore = 'drop table; --';
+  const nb = Buffer.from(JSON.stringify(body)); const o = Object.assign({}, pl, { body: nb.toString('base64') });
+  const aad = ['TMB', o.fv, o.app, o.appVersion, o.engine, o.created, o.scope, '-'].join('|'); o.sha256 = nc.createHash('sha256').update(Buffer.concat([Buffer.from(aad), nb])).digest('hex');
+  const r = await R.parse(JSON.stringify(o)); assert.equal(r.ok, false); assert.match(r.errors[0], /Valor inválido|Checksum|inválido/);
+});
+test('Backup antigo (v1 .json) continua funcionando e a interface reconhece os dois formatos', async () => {
+  const a = load(1, legacyStore()), old = a.get('Backup').text(); assert.equal(a.get('BackupManager').isTmb(old), false);
+  const b = load(1); assert.equal(b.get('Backup').restore(old).ok, true); assert.equal(b.store.tetris_bestScore, '12345');
+  const tmb = (await a.get('BackupManager').create({})).text; assert.equal((await b.get('RestoreManager').restore(tmb)).ok, true);
+  assert.equal(b.get('Backup').parse(tmb).ok, false, 'o parser antigo recusa .tmb com mensagem clara (não corrompe nada)');
+});
+test('TMB de um perfil: exporta só ele (sem PIN/ranking) e importa como perfil NOVO com nome único', async () => {
+  const h = load(1, legacyStore()), P = h.get('Profile'); const z = P.create('Zé').id; P.setPin(z, '4321'); h.run(`localStorage.setItem('tetris_${z}_bestScore','888'); localStorage.setItem('tetris_${z}_stats','{"all":{"games":3}}'); localStorage.setItem('tetris__ranking','{"x":1}')`);
+  const B = h.get('BackupManager'), r = await B.create({ profileId: z, password: 'senha forte 123', iter: 100000 }); assert.equal(r.ok, true); assert.equal(r.scope, 'profile');
+  const p = await h.get('RestoreManager').parse(r.text, 'senha forte 123'); assert.equal(p.ok, true); assert.equal(p.summary.profiles.length, 1); assert.equal(p.backup.data.global.ranking, undefined, 'sem ranking global'); assert.equal(p.r === undefined, true);
+  assert.equal(JSON.parse(p.backup.data.global.profiles).list[0].pin, undefined, 'PIN não é exportado');
+  const h2 = load(1, legacyStore()), P2 = h2.get('Profile'); P2.create('Zé'); const before = JSON.stringify(Object.keys(h2.store).filter((k) => /^tetris_p?1?_?/.test(k)).sort());
+  const res = await h2.get('RestoreManager').restore(r.text, 'senha forte 123'); assert.equal(res.ok, true); assert.equal(res.name, 'Zé (2)', 'nome já existia'); assert.equal(res.id, 'p3');
+  assert.equal(h2.store['tetris_p3_bestScore'], '888'); assert.equal(h2.store.tetris_bestScore, '12345', 'perfil existente intacto'); assert.equal(P2.list().length, 3); assert.equal(P2.list()[2].pin, undefined);
+  assert.equal(load(1, h2.store).get('Profile').list().length, 3, 'persistiu');
+  const lim = load(1); const PL = lim.get('Profile'); while (PL.list().length < PL.MAX) PL.create('P' + PL.list().length); const rl = await lim.get('RestoreManager').restore(r.text, 'senha forte 123'); assert.equal(rl.ok, false); assert.match(rl.errors[0], /Limite/);
+});
+test('TMB de perfil: falha ao gravar não deixa NADA para trás (nem perfil pela metade)', async () => {
+  const h = load(1, legacyStore()), P = h.get('Profile'); const z = P.create('Zé').id; h.run(`localStorage.setItem('tetris_${z}_bestScore','888'); localStorage.setItem('tetris_${z}_history','[]')`);
+  const r = await h.get('BackupManager').create({ profileId: z }); const t = load(1, legacyStore()); const keys0 = JSON.stringify(Object.keys(t.store).sort()), prof0 = t.store.tetris__profiles;
+  t.run("(function(){ var real = localStorage.setItem; localStorage.setItem = function(k, v){ if (/^tetris_p2_history$/.test(k)) throw new Error('QuotaExceededError'); return real(k, v); }; })()");
+  const res = await t.get('RestoreManager').restore(r.text); assert.equal(res.ok, false); assert.match(res.errors[0], /Nada foi alterado/);
+  assert.equal(JSON.stringify(Object.keys(t.store).sort()), keys0); assert.equal(t.store.tetris__profiles, prof0); assert.equal(t.get('Profile').list().length, 1);
+});
+test('Interface: tela de backup protegido e importação de .tmb pedem senha, mostram prévia e restauram', async () => {
+  const a = load(1, legacyStore()), r = await a.get('BackupManager').create({ password: 'senha forte 123', iter: 100000 });
+  const h = load(1); h.sb.openBackupImport();
+  const find = (n, f) => { const o = []; (function w(c) { if (f(c)) o.push(c); (c.children || []).forEach(w); })(n); return o; };
+  const body = h.els.sheetBody, ta = find(body, (c) => c.className === 'txt')[0], verify = find(body, (c) => c.textContent === 'Verificar texto')[0];
+  ta.value = r.text; verify.onclick(); await new Promise((res) => setTimeout(res, 50)); await new Promise((res) => setImmediate(res));
+  const pw = find(body, (c) => c.className === 'txt' && c !== ta)[0]; assert.ok(pw, 'pediu a senha'); pw.value = 'senha forte 123'; find(body, (c) => c.textContent === 'Abrir backup')[0].onclick();
+  await new Promise((res) => setTimeout(res, 100)); await new Promise((res) => setImmediate(res));
+  const rest = find(body, (c) => c.textContent === 'Restaurar (substitui tudo)')[0]; assert.ok(rest, 'mostrou a prévia e o botão de restaurar'); h.sb.openBackup(); assert.ok(find(h.els.sheetBody, (c) => /Backup protegido por senha/.test(c.textContent || '')).length >= 1, 'botão do backup protegido na tela de backup');
+});
