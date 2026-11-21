@@ -26,7 +26,7 @@ const Profile = {
     Store.prefix = this.prefixFor(this.state.current);
     return this.state;
   },
-  save() { Store.gsetJSON('profiles', this.state); },
+  save() { return Store.gsetJSON('profiles', this.state); },
   avatarIdx(p) { return Number.isInteger(p.av) ? p.av : (parseInt(String(p.id).slice(1), 10) - 1 + AVATARS.length) % AVATARS.length; },
   avatar(p) { return AVATARS[this.avatarIdx(p || this.cur())]; },
   /** Próximo avatar ainda não usado (para perfil novo). */
