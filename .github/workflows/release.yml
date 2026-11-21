@@ -91,12 +91,14 @@ jobs:
         run: gradle :app:assembleRelease --no-daemon
       - name: Rename APK
         run: |
-          cp app/build/outputs/apk/release/app-release.apk Tetris-${{ github.ref_name }}.apk
+          APK="Tetris-${GITHUB_REF_NAME//\//-}"        # nome de branch com "/" (execução manual) não vira pasta; tags não mudam
+          echo "APKNAME=$APK" >> "$GITHUB_ENV"
+          cp app/build/outputs/apk/release/app-release.apk "$APK.apk"
           # checksum SHA-256 publicado junto do APK: o app recusa a atualização se não houver ou não conferir
-          sha256sum Tetris-${{ github.ref_name }}.apk > Tetris-${{ github.ref_name }}.apk.sha256
-          cat Tetris-${{ github.ref_name }}.apk.sha256
+          sha256sum "$APK.apk" > "$APK.apk.sha256"
+          cat "$APK.apk.sha256"
       - name: Mostrar impressão digital da assinatura
-        run: keytool -printcert -jarfile Tetris-${{ github.ref_name }}.apk | grep -E "Owner|SHA256"
+        run: keytool -printcert -jarfile "$APKNAME.apk" | grep -E "Owner|SHA256"
       - uses: actions/upload-artifact@v4
         with:
           name: apk
