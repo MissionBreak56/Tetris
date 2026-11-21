@@ -1,3 +1,5 @@
+import com.missionbreak56.tetris.security.ApkVerifier;
+import com.missionbreak56.tetris.security.IntegrityManager;
 import com.missionbreak56.tetris.updates.AppUpdate;
 import com.sun.net.httpserver.HttpServer;
 import java.io.File;
@@ -33,6 +35,24 @@ public class AppUpdateTest {
         s.createContext(R + "/releases/download/v9.9.7/Tetris-v9.9.7.apk", ex -> { ex.sendResponseHeaders(200, notzip.length); try (OutputStream o = ex.getResponseBody()) { o.write(notzip); } });
         s.createContext(R + "/releases/download/v9.9.6/Tetris-v9.9.6.apk", ex -> { ex.sendResponseHeaders(200, tiny.length); try (OutputStream o = ex.getResponseBody()) { o.write(tiny); } });
         s.createContext(R + "/releases/download/v9.9.5/Tetris-v9.9.5.apk", ex -> { ex.sendResponseHeaders(200, 100000); try (OutputStream o = ex.getResponseBody()) { o.write(good, 0, 40000); } catch (Exception ignored) { } ex.close(); });
+        // checksum SHA-256 publicado junto de cada versão (.apk.sha256): "hex  nome"
+        final String goodSum = IntegrityManager.sha256Hex(good);
+        for (String t : new String[]{"v9.9.9", "v9.9.8", "v9.9.7", "v9.9.6", "v9.9.5"}) {
+            final byte[] content = t.equals("v9.9.7") ? notzip : t.equals("v9.9.6") ? tiny : good;
+            final String body = IntegrityManager.sha256Hex(content) + "  Tetris-" + t + ".apk\n";
+            s.createContext(R + "/releases/download/" + t + "/Tetris-" + t + ".apk.sha256", ex -> { byte[] b = body.getBytes(); ex.sendResponseHeaders(200, b.length); try (OutputStream o = ex.getResponseBody()) { o.write(b); } });
+        }
+        // v9.9.4: APK sem checksum publicado; v9.9.3: checksum errado; v9.9.2: arquivo de checksum lixo; v9.9.1/9.9.0: verificador recusa/aceita; v9.8.9: tamanho absurdo
+        final String[] tags = {"v9.9.4", "v9.9.3", "v9.9.2", "v9.9.1", "v9.9.0", "v9.8.9"};
+        for (String t : tags) {
+            final String tag = t;
+            s.createContext(R + "/releases/download/" + tag + "/Tetris-" + tag + ".apk", ex -> {
+                if (tag.equals("v9.8.9")) { ex.sendResponseHeaders(200, 90_000_000L); try (OutputStream o = ex.getResponseBody()) { o.write(good, 0, 1000); } catch (Exception ignored) { } return; }
+                ex.sendResponseHeaders(200, good.length); try (OutputStream o = ex.getResponseBody()) { o.write(good); } });
+            if (tag.equals("v9.9.4")) continue;
+            final String sum = tag.equals("v9.9.3") ? IntegrityManager.sha256Hex("outro conteudo".getBytes()) + "  x\n" : tag.equals("v9.9.2") ? "isto nao e um hash\n" : goodSum + "  Tetris-" + tag + ".apk\n";
+            s.createContext(R + "/releases/download/" + tag + "/Tetris-" + tag + ".apk.sha256", ex -> { byte[] b = sum.getBytes(); ex.sendResponseHeaders(200, b.length); try (OutputStream o = ex.getResponseBody()) { o.write(b); } });
+        }
         s.start();
         String base = "http://127.0.0.1:" + s.getAddress().getPort();
         File dir = Files.createTempDirectory("upd").toFile();
@@ -74,6 +94,25 @@ public class AppUpdateTest {
         Ev cx = new Ev(); AppUpdate uc = new AppUpdate(cx, base, base, "MissionBreak56/Tetris"); uc.download("v9.9.9", dir);
         cx.until("\"progress\"", 5000); uc.cancel(); cx.until("\"cancelled\"", 5000); uc.join(3000);
         check(!new File(dir, "Tetris-v9.9.9.apk").exists() && !new File(dir, "Tetris-v9.9.9.apk.part").exists(), "cancelar: nada fica no disco");
+
+        // ---- segurança da atualização: checksum, HTTPS, assinatura ----
+        Ev ns = new Ev(); new AppUpdate(ns, base, base, "MissionBreak56/Tetris").download("v9.9.4", dir); check(ns.until("\"error\"", 5000).toLowerCase().contains("checksum"), "segurança: versão sem checksum válido publicado é recusada (nem baixa o APK)");
+        check(!new File(dir, "Tetris-v9.9.4.apk").exists(), "segurança: sem checksum não deixa APK no disco");
+        Ev bs = new Ev(); new AppUpdate(bs, base, base, "MissionBreak56/Tetris").download("v9.9.3", dir); check(bs.until("\"error\"", 8000).contains("não confere com o SHA-256"), "segurança: SHA-256 diferente (arquivo adulterado) é recusado");
+        check(!new File(dir, "Tetris-v9.9.3.apk").exists() && !new File(dir, "Tetris-v9.9.3.apk.part").exists(), "segurança: arquivo adulterado é apagado");
+        Ev gs = new Ev(); new AppUpdate(gs, base, base, "MissionBreak56/Tetris").download("v9.9.2", dir); check(gs.until("\"error\"", 5000).contains("inválido"), "segurança: arquivo de checksum inválido é recusado");
+        Ev big = new Ev(); new AppUpdate(big, base, base, "MissionBreak56/Tetris").download("v9.8.9", dir); check(big.until("\"error\"", 5000).contains("grande demais"), "segurança: tamanho absurdo é recusado antes de baixar");
+        final List<File> seen = new ArrayList<>();
+        ApkVerifier reject = f -> { seen.add(f); return "A assinatura do APK não confere com a do app instalado. Atualização recusada."; };
+        Ev vr = new Ev(); new AppUpdate(vr, base, base, "MissionBreak56/Tetris", reject).download("v9.9.1", dir);
+        check(vr.until("\"error\"", 8000).contains("assinatura do APK não confere"), "segurança: certificado diferente é recusado");
+        check(seen.size() == 1 && !new File(dir, "Tetris-v9.9.1.apk").exists(), "segurança: APK com certificado errado é apagado");
+        ApkVerifier accept = f -> null;
+        Ev va = new Ev(); new AppUpdate(va, base, base, "MissionBreak56/Tetris", accept).download("v9.9.0", dir); va.until("\"downloaded\"", 8000);
+        check(new File(dir, "Tetris-v9.9.0.apk").isFile(), "segurança: APK com checksum e certificado corretos é aceito");
+        for (String bad : new String[]{"http://example.com", "ftp://x", "", null, "https//x"}) { boolean threw = false; try { new AppUpdate(new Ev(), bad, base, "a/b"); } catch (IllegalArgumentException e) { threw = true; } check(threw, "segurança: HTTP/URL inválida recusada: " + bad); }
+        new AppUpdate(new Ev(), "https://github.com", "https://api.github.com", "MissionBreak56/Tetris");
+        check(true, "segurança: https é aceito");
         s.stop(0); System.out.println("TUDO OK");
     }
 }

@@ -10,6 +10,7 @@ import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 import com.missionbreak56.tetris.network.LanNet;
 import com.missionbreak56.tetris.security.CryptoManager;
+import com.missionbreak56.tetris.security.ApkSignatureVerifier;
 import com.missionbreak56.tetris.security.BridgeValidator;
 import com.missionbreak56.tetris.storage.SnapshotManager;
 import com.missionbreak56.tetris.storage.StorageManager;
@@ -52,7 +53,7 @@ public final class GameBridge {
     public GameBridge(Activity act, AppLifecycleManager life) {
         this.act = act;
         this.life = life;
-        this.installer = new UpdateInstaller(act, new UpdateInstaller.Sink() { public void js(String code) { GameBridge.this.js(code); } });
+        this.installer = new UpdateInstaller(act, new UpdateInstaller.Sink() { public void js(String code) { GameBridge.this.js(code); } }, new ApkSignatureVerifier(act));
     }
 
     public void attach(WebView w) { this.web = w; }
@@ -90,7 +91,7 @@ public final class GameBridge {
 
     /** Atualização dentro do app: procurar/baixar (AppUpdate, GitHub Releases); instalar fica em {@link UpdateInstaller}. */
     private synchronized AppUpdate upd() {
-        if (upd == null) upd = new AppUpdate(new AppUpdate.Listener() { public void event(final String json) { js("Updater._ev(" + json + ")"); } }, AppUpdate.WEB, AppUpdate.API, "MissionBreak56/Tetris");
+        if (upd == null) upd = new AppUpdate(new AppUpdate.Listener() { public void event(final String json) { js("Updater._ev(" + json + ")"); } }, AppUpdate.WEB, AppUpdate.API, "MissionBreak56/Tetris", new ApkSignatureVerifier(act));
         return upd;
     }
 

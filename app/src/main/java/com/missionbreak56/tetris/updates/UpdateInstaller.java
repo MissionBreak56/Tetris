@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 import com.missionbreak56.tetris.network.LanNet;
+import com.missionbreak56.tetris.security.ApkVerifier;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -25,9 +26,10 @@ public final class UpdateInstaller {
 
     private final Activity act;
     private final Sink sink;
+    private final ApkVerifier verifier;
     private BroadcastReceiver rx;
 
-    public UpdateInstaller(Activity act, Sink sink) { this.act = act; this.sink = sink; }
+    public UpdateInstaller(Activity act, Sink sink, ApkVerifier verifier) { this.act = act; this.sink = sink; this.verifier = verifier; }
 
     public File updatesDir() { return new File(act.getCacheDir(), "updates"); }
 
@@ -65,6 +67,10 @@ public final class UpdateInstaller {
             File[] fs = updatesDir().listFiles(); File apk = null;
             if (fs != null) for (File f : fs) if (f.getName().endsWith(".apk") && (apk == null || f.lastModified() > apk.lastModified())) apk = f;
             if (apk == null) { err("Arquivo da atualização não encontrado. Baixe de novo."); return; }
+            if (verifier != null) {                                       // confere de novo na hora de instalar (o arquivo pode ter mudado desde o download)
+                String why = verifier.verify(apk);
+                if (why != null) { apk.delete(); err(why); return; }
+            }
             if (Build.VERSION.SDK_INT >= 26 && !act.getPackageManager().canRequestPackageInstalls()) {
                 act.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + act.getPackageName())));
                 sink.js("Updater._ev({\"e\":\"needPermission\"})"); return;
