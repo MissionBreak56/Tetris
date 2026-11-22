@@ -909,3 +909,28 @@ test('LAN: mensagem duplicada ou fora de ordem da partida não é aplicada duas 
   n._line(msg); assert.equal(n.rxSeq, rx0 + 1); n._line(msg); n._line(msg); assert.equal(n.rxSeq, rx0 + 1, 'duplicatas ignoradas');
   n._line(JSON.stringify({ k: 'in', s: rx0 + 5, u: 21, e: [] })); assert.equal(n.rxSeq, rx0 + 1, 'salto de sequência não é aceito (pede reenvio)');
 });
+
+/* ---------------- bug: a tela final online vazava para outros modos ---------------- */
+const onlineEnd = () => { const P = logInputs(startMatch(pair())); playOut(P, 3); V(P.A).showEnd(); return P; };   // (o harness não roda o setTimeout que mostra a tela final)
+test('BUG: depois de uma partida online com revanche pedida, perder em OUTRO modo mostra o menu final normal (Retry), não "Aguardando o oponente…"', () => {
+  const P = onlineEnd(), A = P.A; assert.equal(NetOf(A).st, 'ended');
+  assert.match(A.els.bRetry.textContent, /Revanche|Voltar ao menu/, 'tela final online: revanche');
+  A.els.bRetry.onclick();                                                         // pede revanche: o botão vira "Aguardando o oponente…" (desligado)
+  assert.equal(A.els.bRetry.textContent, 'Aguardando o oponente…'); assert.equal(A.els.bRetry.disabled, true);
+  A.sb.goMenu();                                                                  // sai do online (volta ao menu)
+  assert.equal(A.els.bRetry.textContent, 'Retry', 'sair para o menu restaura o botão'); assert.equal(A.els.bRetry.disabled, false);
+  A.sb.newGame(1, { seed: 5 }); A.setState('PLAY'); A.els.bRetry.textContent = 'Aguardando o oponente…'; A.els.bRetry.disabled = true;     // resíduo, como acontecia antes da correção
+  A.sb.gameOver();
+  assert.equal(A.els.bRetry.textContent, 'Retry', 'fim de partida em modo solo: botão normal'); assert.equal(A.els.bRetry.disabled, false, 'e habilitado');
+});
+test('BUG: "Retry" em outro modo recomeça o jogo (não pede revanche online só porque houve uma partida online antes)', () => {
+  const P = onlineEnd(), A = P.A; assert.ok(V(A).cfg && V(A).cfg.net, 'resíduo: a configuração da partida online antiga continua na memória');
+  let rematches = 0; const real = NetOf(A).rematch.bind(NetOf(A)); NetOf(A).rematch = () => { rematches++; return real(); };
+  A.sb.goMenu(); A.sb.newGame(1, { seed: 9 }); A.setState('PLAY'); A.sb.gameOver();
+  A.els.bRetry.onclick();
+  assert.equal(rematches, 0, 'não pediu revanche'); assert.notEqual(A.state(), 'OVER', 'recomeçou o jogo (contagem/jogando)'); assert.equal(A.G().mode, 1);
+});
+test('Tela final online continua mostrando o estado da revanche (Revanche → Aguardando)', () => {
+  const P = onlineEnd(); assert.match(P.A.els.bRetry.textContent, /Revanche|Voltar ao menu/); assert.equal(P.A.els.bRetry.disabled, false);
+  P.A.els.bRetry.onclick(); assert.equal(NetOf(P.A).ready, true); assert.equal(P.A.els.bRetry.textContent, 'Aguardando o oponente…'); assert.equal(P.A.els.bRetry.disabled, true);
+});

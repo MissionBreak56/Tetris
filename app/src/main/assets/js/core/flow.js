@@ -3,7 +3,9 @@
 /* ================= FLUXO ================= */
 function show(id){ $(id).classList.add('on'); }
 function hide(id){ $(id).classList.remove('on'); }
-function hideAll(){ ['menu','sheet','confirmBox','pausePanel','endPanel'].forEach(hide); }
+/** Botão "Retry" da tela final: volta ao padrão. A tela final ONLINE troca o texto/estado dele ("Aguardando o oponente…", desligado) e isso não pode vazar para outros modos. */
+function resetRetryBtn(){ const b=$('bRetry'); b.textContent='Retry'; b.disabled=false; }
+function hideAll(){ ['menu','sheet','confirmBox','pausePanel','endPanel'].forEach(hide); resetRetryBtn(); }
 function restartAnim(el,cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
 
 function startGame(mode,opts){
@@ -25,6 +27,7 @@ function gameOver(reason){
   const res=Results.compile(G,reason), rec=Results.commit(res);
   Results.render(res,rec);
   $('pauseBtn').style.display='none';
+  resetRetryBtn();
   setTimeout(()=>{ if(state==='OVER') show('endPanel'); },1100);
 }
 let pauseFrom='PLAY';

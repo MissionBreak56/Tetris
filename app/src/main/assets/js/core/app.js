@@ -40,7 +40,8 @@ $('rpExit').onclick=()=>{sfx.click();goMenu();};
 $('tutOk').onclick=()=>{sfx.click();Tut.event('ok');};
 $('tutSkip').onclick=()=>{sfx.click();Tut.skip();};
 $('bEmote').onclick=()=>{sfx.click();Social.togglePal();};
-$('bRetry').onclick=()=>{sfx.click();if(Versus.net||(Versus.cfg&&Versus.cfg.net)){Net.rematch();return;}startGame(G?G.mode:1,G?G.opts:undefined);};
+$('bRetry').onclick=()=>{sfx.click();if(state==='VSOVER'&&(Versus.net||(Versus.cfg&&Versus.cfg.net))){Net.rematch();return;}   // só na tela final ONLINE (Versus.cfg antigo não vale em outros modos)
+  startGame(G?G.mode:1,G?G.opts:undefined);};
 $('bEndHome').onclick=()=>{sfx.click();goMenu();};
 $('pauseBtn').onclick=()=>{ if(state==='PLAY'||state==='VERSUS'){sfx.click();pauseGame();} };
 document.addEventListener('visibilitychange',()=>{ if(document.hidden) pauseGame(); });

@@ -165,6 +165,7 @@ const Versus = {
       const on = r.names[1 - me], tot = H2H.record(on, win ? 'w' : 'l', Net.sid), rr = tot;
       box.appendChild(kv('Placar contra ' + on, rr.w + ' × ' + rr.l));
     }
+    resetRetryBtn();                                                    // o botão é compartilhado com os outros modos: parte sempre do padrão
     if (net) Social.setupEnd(box);
     if (r.tie && !r.reason) box.appendChild(h('div', { class: 'hint', text: 'Desempate por lixo enviado/pontuação.' }));
     if (r.reason) box.appendChild(h('div', { class: 'errs', text: r.reason }));
