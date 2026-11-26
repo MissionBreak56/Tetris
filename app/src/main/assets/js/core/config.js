@@ -65,6 +65,7 @@ const settings=readSettings();
 function reloadProfileData(){
   Object.assign(settings,readSettings());
   Controls.load(); applyTheme(); refreshMenu(); resize();
+  Onboarding.check();                                  // perfil com nome padrão (troca de perfil, restauração de backup...) precisa escolher o nome
 }
 Profile.onSwitch=()=>reloadProfileData();
 function saveSettings(){

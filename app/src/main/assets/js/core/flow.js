@@ -48,6 +48,7 @@ function resumeGame(){
   hide('pausePanel'); hide('confirmBox'); state=pauseFrom; try{ac();}catch(e){} startMusic(); }
 /** Botão Voltar do Android: fecha confirmação > folha > pausa/retoma > sai do replay. */
 function handleBack(){
+  if(Onboarding.open) return;                           // escolha de nome/avatar é obrigatória: não dá para sair
   if($('confirmBox').classList.contains('on')){ hide('confirmBox'); return; }
   if($('pzAsk').classList.contains('on')){ hide('pzAsk'); return; }
   if($('sheet').classList.contains('on')){ Sheet.back(); return; }

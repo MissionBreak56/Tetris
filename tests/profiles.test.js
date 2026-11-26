@@ -52,7 +52,8 @@ test('nomes: obrigatório, único (sem diferenciar maiúsculas), sanitizado e li
   const id = P(h).create('<b>Nome   muito    comprido demais</b>').id;
   const n = P(h).list().find((p) => p.id === id).name; assert.ok(n.length <= 16 && !/[<>]/.test(n) && !/ {2}/.test(n));
   assert.equal(P(h).rename(id, 'Ana').ok, false); assert.equal(P(h).rename(id, 'Novo').ok, true); assert.equal(P(h).rename('p99', 'x').ok, false);
-  assert.equal(P(h).rename('p1', 'Jogador 1').ok, true, 'manter o próprio nome é permitido');
+  assert.equal(P(h).rename('p1', 'Jogador 1').ok, false, 'o nome padrão nunca é aceito (nem para manter)');
+  assert.equal(P(h).rename('p1', 'Ana2').ok, true); assert.equal(P(h).rename('p1', 'Ana2').ok, true, 'manter o próprio nome (não padrão) é permitido');
 });
 test('limite de 5 perfis', () => {
   const h = load(1); for (let i = 0; i < 4; i++) assert.equal(P(h).create('P' + i).ok, true);

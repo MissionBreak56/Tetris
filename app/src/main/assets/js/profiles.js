@@ -3,6 +3,8 @@
    Outros perfis usam 'tetris_<id>_*'. Estatísticas, recordes, conquistas, configurações, temas etc. ficam isolados por perfil. */
 /** Avatares (emoji) dos perfis. */
 const AVATARS = ['🙂', '😎', '🤖', '👾', '🦊', '🐱', '🐼', '🦄', '🚀', '⚡', '🔥', '🌟', '🎮', '🧩', '🐲', '🍕'];
+/** Nome padrão do perfil inicial. Não pode ser escolhido de propósito: o jogador precisa trocá-lo (ver onboarding.js). */
+const DEFAULT_PROFILE_NAME = 'Jogador 1';
 const Profile = {
   MAX: 5, state: null, onSwitch: null,
   /* PIN opcional (4 dígitos), guardado só como hash (fnv de id+PIN). 5 erros = espera de 30 s. Proteção local simples (não é criptografia). */
@@ -17,7 +19,7 @@ const Profile = {
   parse(d) {
     let list = d && Array.isArray(d.list) ? d.list.filter((p) => p && /^p\d+$/.test(p.id) && this.cleanName(p.name)).map((p) => { const o = { id: p.id, name: this.cleanName(p.name) }; if (Number.isInteger(p.av) && p.av >= 0 && p.av < AVATARS.length) o.av = p.av; if (typeof p.pin === 'string' && Profile.PIN_RE.test(p.pin)) o.pin = p.pin; return o; }) : [];
     const seen = new Set(); list = list.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true))).slice(0, this.MAX);
-    if (!list.length) list = [{ id: 'p1', name: 'Jogador 1' }];
+    if (!list.length) list = [{ id: 'p1', name: DEFAULT_PROFILE_NAME }];
     const maxId = list.reduce((m, p) => Math.max(m, parseInt(p.id.slice(1), 10)), 0);
     return { list, current: d && list.some((p) => p.id === d.current) ? d.current : list[0].id, next: Math.max(num(d && d.next, 0), maxId + 1) };
   },
@@ -91,9 +93,23 @@ const Profile = {
   },
   list() { return this.state.list; },
   cur() { return this.state.list.find((p) => p.id === this.state.current); },
+  /** true se o nome é o padrão ("Jogador 1"), ignorando maiúsculas, acentos e espaços repetidos. */
+  isDefaultName(n) { const k = (x) => this.cleanName(x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); return k(n) === k(DEFAULT_PROFILE_NAME); },
+  /** O perfil ativo ainda usa o nome padrão => precisa escolher um nome. */
+  needsName() { return this.isDefaultName(this.cur().name); },
+  /** Já existem dados salvos neste perfil (jogador antigo) ou é o primeiro acesso? */
+  hasData(p) { const pre = this.prefixFor((p || this.cur()).id); return ['stats', 'history', 'bestScore', 'bestScore2Minutes', 'bestScoreStrategy', 'bestSprintMs', 'achv', 'rewards'].some((k) => { try { return localStorage.getItem(pre + k) != null; } catch (e) { return false; } }); },
+  /** Conclui o onboarding: valida o nome (obrigatoriamente diferente do padrão) e grava nome + avatar no perfil ativo. */
+  finishOnboarding(n, av) {
+    const id = this.cur().id, c = this.checkName(n, id); if (!c.ok) return c;
+    if (!Number.isInteger(av) || av < 0 || av >= AVATARS.length) return { ok: false, error: 'Escolha um avatar' };
+    const r = this.rename(id, c.name); if (!r.ok) return r;
+    this.setAvatar(id, av); return { ok: true };
+  },
   checkName(n, exceptId) {
     const name = this.cleanName(n);
     if (!name) return { ok: false, error: 'Digite um nome' };
+    if (this.isDefaultName(name)) return { ok: false, error: 'Esse é o nome padrão. Escolha outro nome.' };
     if (this.state.list.some((p) => p.id !== exceptId && p.name.toLowerCase() === name.toLowerCase())) return { ok: false, error: 'Já existe um perfil com esse nome' };
     return { ok: true, name };
   },

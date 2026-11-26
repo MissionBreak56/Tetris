@@ -88,6 +88,7 @@ function load(seed = 1, store = {}, opts = {}) {
   };
   if (opts.globals) Object.assign(sandbox, opts.globals);      // ex.: { AndroidBridge } para testar a ponte nativa
   sandbox.window = sandbox;
+  if (opts.onboard !== true) sandbox.NO_ONBOARDING = true;     // testes antigos não passam pela tela obrigatória de nome/avatar
   vm.createContext(sandbox);
   vm.runInContext(seedSource(seed), sandbox);
   extractScripts().forEach((sc) => vm.runInContext(sc.code, sandbox, { filename: sc.name }));

@@ -25,7 +25,7 @@ function askPin(title, verify, done) {
 const Lock = {
   active: false, view: 'pad',
   show() { const p = Profile.cur(); if (!Profile.hasPin(p)) { this.hide(); return false; } this.active = true; this.view = 'pad'; this.render(); show('lockPanel'); return true; },
-  hide() { this.active = false; hide('lockPanel'); },
+  hide() { this.active = false; hide('lockPanel'); Onboarding.check(); },
   render() {
     const p = Profile.cur(), t = $('lockTitle'), b = $('lockBody'); clearEl(b);
     if (this.view === 'forgot') {

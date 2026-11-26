@@ -31,3 +31,6 @@ O APK é compilado pelo GitHub Actions ao enviar uma tag `v*` (ver `.github/work
 node --test tests/*.test.js
 ```
 O CI roda os testes em todo push/PR e só compila o APK se passarem.
+
+## Primeiro acesso
+Ao abrir o app pela primeira vez é obrigatório escolher um **nome de perfil** (diferente do padrão "Jogador 1") e um **avatar**. Quem já tinha o nome padrão vê o aviso "Você deve mudar seu nome"; os dados continuam no mesmo perfil.

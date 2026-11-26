@@ -45,7 +45,7 @@ test('PIN: definir (duas vezes iguais), alterar e remover pela tela de edição 
   btnBy('Definir PIN').onclick(); assert.equal(h.els.sheetTitle.textContent, 'Novo PIN'); press('2468'); assert.equal(h.els.sheetTitle.textContent, 'Repita o PIN'); press('1357'); assert.match(text(h.els.sheetBody), /Os PINs são diferentes/); assert.equal(P.hasPin(P.cur()), false);
   press('2468'); assert.equal(P.hasPin(P.cur()), true); assert.equal(P.tryPin('p1', '2468').ok, true); assert.ok(h.els.sheetBody.children.some((c) => c.textContent === 'Remover PIN'));
   btnBy('Remover PIN').onclick(); assert.equal(P.hasPin(P.cur()), false);
-  const grid = h.els.sheetBody.children.find((c) => c.className === 'avgrid'); assert.equal(grid.children.length, 16); grid.children[9].onclick(); h.els.sheetBody.children.find((c) => c.className === 'txt').value = 'Jogador 1'; btnBy('Salvar').onclick(); assert.equal(P.avatar(P.cur()), '⚡');
+  const grid = h.els.sheetBody.children.find((c) => c.className === 'avgrid'); assert.equal(grid.children.length, 16); grid.children[9].onclick(); h.els.sheetBody.children.find((c) => c.className === 'txt').value = 'Ana'; btnBy('Salvar').onclick(); assert.equal(P.avatar(P.cur()), '⚡'); assert.equal(P.cur().name, 'Ana');
   h.sb.openProfileName(null); const g2 = h.els.sheetBody.children.find((c) => c.className === 'avgrid'); g2.children[4].onclick(); h.els.sheetBody.children.find((c) => c.className === 'txt').value = 'Novo'; btnBy('Salvar').onclick(); assert.equal(P.cur().name, 'Novo'); assert.equal(P.avatar(P.cur()), '🦊');
 });
 test('PIN: tela de bloqueio ao abrir (PIN certo libera, outro perfil, esqueci o PIN apaga os dados do perfil)', () => {

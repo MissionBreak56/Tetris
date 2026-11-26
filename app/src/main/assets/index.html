@@ -133,7 +133,10 @@
   #emoteShow.on{display:block}
   .pindots{font-size:34px;letter-spacing:10px;text-align:center;margin:8px 0;color:var(--val)}
   .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0}.pad .btn{margin:0;width:100%;padding:14px 0;font-size:22px}
-  .avgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin:6px 0}.avgrid .btn{margin:0;width:100%;padding:6px 0;font-size:20px}.avgrid .btn.sel{border-color:var(--acc);box-shadow:0 0 8px rgba(var(--glow),.8)}
+  #onboardPanel{z-index:90;overflow-y:auto}#onboardPanel .panel{max-height:96vh;overflow-y:auto}
+  .errs.warn{font-size:14px;line-height:1.4;color:var(--val);background:rgba(var(--glow),.12);border:1px solid var(--acc);border-radius:10px;padding:8px 10px;margin:8px 0;min-height:0}
+  #onboardPanel .btn:disabled{opacity:.45}
+  .avgrid{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin:6px 0}.avgrid .btn{margin:0;width:100%;padding:6px 0;font-size:20px}.avgrid .btn.sel{border-color:var(--ink);background:rgba(var(--glow),.55);box-shadow:0 0 0 2px var(--acc),0 0 12px var(--acc);transform:scale(1.12);position:relative;z-index:1}
   #lockPanel{z-index:60}
   .updnotes{white-space:pre-wrap;text-align:left;max-height:30vh;overflow:auto;margin:8px 0}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 10px}.grid2 .btn{margin:0;width:100%;padding:12px 6px}.grid2 .btn:last-child:nth-child(odd){grid-column:1/-1}
@@ -169,6 +172,7 @@
   <button class="mb side" id="tSound"><svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>SOUND<i class="slash"></i></button>
 </div>
 
+<div class="overlay" id="onboardPanel"><div class="panel sheetp"><h1 id="obTitle"></h1><div id="obBody"></div></div></div>
 <div class="overlay" id="sheet"><div class="panel sheetp"><h2 id="sheetTitle"></h2><div id="sheetBody"></div><button class="btn small" id="sheetBack">Voltar</button></div></div>
 <div class="overlay" id="confirmBox"><div class="panel"><div class="stat" id="confirmText"></div><div class="row"><button class="btn small" id="confirmNo">Cancelar</button><button class="btn small danger" id="confirmYes">Confirmar</button></div></div></div>
 
@@ -203,6 +207,7 @@
 <script src="js/ranking.js"></script>
 <script src="js/profiles.js"></script>
 <script src="js/lock.js"></script>
+<script src="js/onboarding.js"></script>
 <script src="js/update.js"></script>
 <script src="js/skins.js"></script>
 <script src="js/themes.js"></script>
